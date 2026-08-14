@@ -59,7 +59,16 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://10.0.1.123:11434")
 #
 # Efectul secundar util: cei doi difera acum si ca framing, si ca model. Doua
 # instante ale aceluiasi model gresesc corelat.
-MODEL_IMPLICIT = os.environ.get("MODEL_VERIFICATOR", "qwen3:14b")
+# IMPLICIT pe llama3.1:8b, nu pe modelul puternic, dintr-un motiv de mediu:
+# masina de inferenta ruleaza pe CPU, iar un model de 14B proceseaza prompturi
+# cu articole juridice lungi in minute, nu secunde. Masurat: 3 cazuri in 11
+# minute, adica nefezabil pentru un set de 105.
+#
+# RECOMANDAREA pentru productie, odata ce GPU-ul e folosit efectiv:
+#   MODEL_VERIFICATOR=qwen3:14b   sau mai mare
+# Verificarea de ancorare e locul unde un model puternic schimba cel mai mult
+# rezultatul, fiindca acolo se nasc refuzurile false.
+MODEL_IMPLICIT = os.environ.get("MODEL_VERIFICATOR", "llama3.1:8b")
 MODEL_V2 = os.environ.get("MODEL_VERIFICATOR_2", "llama3.1:8b")
 
 PROMPT_ANCORARE = """Verifici daca fiecare afirmatie de fond dintr-un raspuns se regaseste in extrasele date.
@@ -111,7 +120,7 @@ class Verdict:
     brut: str = ""
 
 
-def _cere_json(prompt: str, model: str, timeout: float = 240.0) -> dict:
+def _cere_json(prompt: str, model: str, timeout: float = 600.0) -> dict:
     r = httpx.post(
         f"{OLLAMA}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False, "format": "json",

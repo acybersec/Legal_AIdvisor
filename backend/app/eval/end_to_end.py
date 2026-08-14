@@ -27,7 +27,16 @@ from app.answer.pipeline import Pipeline
 from app.eval.cases import Caz, toate
 
 ROOT = Path(__file__).resolve().parents[3]
-CONCURENTA = 3  # peste asta, cele doua modele se schimba prea des in VRAM
+# Serial, nu concurent, si nu din prudenta excesiva.
+#
+# Ollama serializeaza oricum cererile catre acelasi model. Pe inferenta CPU,
+# unde un apel dureaza zeci de secunde, concurenta nu adauga debit: adauga doar
+# cereri care asteapta in coada pana depasesc timeout-ul HTTP. Masurat: cu trei
+# fire, 3 din primele 4 cazuri au esuat cu eroare de retea, desi acelasi caz
+# rulat izolat trece.
+#
+# Pe GPU, unde apelurile sunt scurte, o valoare de 3-4 redevine utila.
+CONCURENTA = 1
 
 
 def _clasifica(caz: Caz, rez) -> tuple[str, str]:
@@ -45,8 +54,21 @@ def _clasifica(caz: Caz, rez) -> tuple[str, str]:
     return "FALS", f"a citat {sorted(citate)} in loc de {caz.act}#{caz.articol}"
 
 
-def ruleaza(limita: int | None = None) -> dict:
+def ruleaza(limita: int | None = None, *, doar_model: bool = False) -> dict:
+    """Ruleaza evaluarea. `doar_model` pastreaza doar cazurile care depind de model.
+
+    Cele 75 de cazuri de tip lookup trec pe calea determinista: raspunsul e
+    textul articolului, redat din baza, fara interventia vreunui model. Sunt
+    corecte prin constructie si deja masurate separat, la 100% recall@1 in
+    evaluarea de regasire. A le trece prin lantul complet nu masoara nimic nou.
+
+    Ce ramane sunt cele 30 de cazuri unde modelul chiar decide ceva: 20 de
+    continut si 10 de refuz. Acolo se vede daca sistemul raspunde corect si daca
+    stie sa taca.
+    """
     cazuri = toate(str(ROOT / "data" / "legal.db"))
+    if doar_model:
+        cazuri = [c for c in cazuri if c.tip != "lookup"]
     if limita:
         cazuri = cazuri[:limita]
 
@@ -78,8 +100,9 @@ def ruleaza(limita: int | None = None) -> dict:
 
 
 def main() -> int:
-    limita = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    date = ruleaza(limita)
+    argumente = [a for a in sys.argv[1:] if not a.startswith("--")]
+    limita = int(argumente[0]) if argumente else None
+    date = ruleaza(limita, doar_model="--doar-model" in sys.argv)
     rez = date["rezultate"]
 
     pe_tip: dict[str, Counter] = {}

@@ -157,6 +157,49 @@ Documentele utilizatorului **nu părăsesc mașina**.
    O trimitere juridică scrisă de model și absentă din surse oprește răspunsul.
 7. **Doi verificatori independenți** plus refuz explicit.
 
+## Cifre măsurate
+
+Toate de mai jos vin din rulări reale, pe inferență **CPU**. Ce nu s-a măsurat e spus ca atare.
+
+### Regăsire — suita completă, 95 de cazuri, rulare încheiată
+
+| Tip de caz | Cazuri | recall@1 | recall@3 | recall@5 |
+|---|---:|---:|---:|---:|
+| Conținut, întrebare în limbaj natural | 20 | **85,0%** | 90,0% | 95,0% |
+| Lookup, trimitere explicită la articol | 75 | **100%** | 100% | 100% |
+| Total | 95 | 96,8% | 97,9% | 98,9% |
+
+Progresia care a produs cifra de conținut, fiecare pas după un diagnostic:
+
+| Etapă | recall@1 | recall@5 |
+|---|---:|---:|
+| RRF cu ponderi egale | 65,0% | 85,0% |
+| RRF ponderat | 75,0% | 90,0% |
+| Plus potrivire pe prefix pentru flexiune | **85,0%** | **95,0%** |
+
+### Cap la cap — parțial
+
+| Măsurătoare | Rezultat |
+|---|---|
+| Test de sanitate, 3 cu răspuns și 3 cu refuz | **6/6** |
+| Eșantion de 12 cazuri de conținut | **9/12** corecte, 1 răspuns greșit, 2 refuzuri false |
+
+### Ce NU s-a măsurat, și de ce
+
+**Suita completă cap la cap, pe toate cele 105 cazuri, nu a rulat până la capăt.** Cauza este
+inferența pe CPU: un caz care depinde de model durează între 90 de secunde și peste 20 de
+minute, iar rularea completă ar depăși 24 de ore. Trei încercări au fost oprite.
+
+Setul de evaluare **există și este validat**: 105 cazuri, fiecare cu articol-sursă verificat că
+există exact o dată în bază. Rulează cu:
+
+```bash
+.venv/bin/python -m app.eval.end_to_end             # tot setul
+.venv/bin/python -m app.eval.end_to_end --doar-model # doar cele 30 care depind de model
+```
+
+Prima măsurătoare de făcut după ce GPU-ul funcționează.
+
 ## Ce nu face încă
 
 Lista e completă și onestă. Citește-o înainte de a promite ceva unui client.

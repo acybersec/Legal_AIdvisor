@@ -175,7 +175,7 @@ def leaga_citari(text: str, rezultate: list[Rezultat]) -> tuple[str, list[Rezult
 
 def genereaza(intrebare: str, rezultate: list[Rezultat], *,
               model: str = MODEL_GENERARE, temperatura: float = 0.2,
-              timeout: float = 240.0) -> Raspuns:
+              timeout: float = 600.0) -> Raspuns:
     if not rezultate:
         return Raspuns(text="", text_brut="", insuficient=True)
 
