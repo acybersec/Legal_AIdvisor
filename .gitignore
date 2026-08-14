@@ -1,36 +1,174 @@
-# Secrete — repo PUBLIC, nimic din astea nu intră niciodată în istoric.
+# ─────────────────────────────────────────────────────────────
+# Secrete — repo PUBLIC. Nimic din astea nu intră niciodată în istoric.
+# ─────────────────────────────────────────────────────────────
 .env
 .env.*
 *.env
 !.env.example
+!.env.template
 *.pem
 *.key
+*.p12
+*.pfx
 *credentials*
 *secret*
 *token*
+.secrets/
+service-account*.json
 
-# Dependențe și build.
-node_modules/
-.next/
-dist/
-build/
-out/
-.venv/
-venv/
-__pycache__/
-*.pyc
-.turbo/
-.cache/
-coverage/
-
-# Date de client / documente juridice — nu se publică.
+# ─────────────────────────────────────────────────────────────
+# Date de client și documente juridice — nu se publică.
+# ─────────────────────────────────────────────────────────────
 data/
+corpus/
 clients/
+uploads/
+documents/
 *.dump
 *.sql
 *.sqlite
+*.sqlite3
+*.db
 
-# Zgomot de sistem.
+# ─────────────────────────────────────────────────────────────
+# Python / FastAPI
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib60/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Medii virtuale
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Unelte de test și lint
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# Migrații locale (păstrează versiunile, aruncă cache-ul)
+alembic/versions/__pycache__/
+
+# ─────────────────────────────────────────────────────────────
+# Node / Next.js
+# ─────────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build Next.js
+.next/
+out/
+build/
+dist/
+.turbo/
+next-env.d.ts
+*.tsbuildinfo
+
+# Testare
+/coverage
+.nyc_output/
+playwright-report/
+test-results/
+/blob-report/
+/playwright/.cache/
+
+# Deploy
+.vercel
+.netlify
+
+# Loguri de package manager
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ─────────────────────────────────────────────────────────────
+# Modele AI, embeddings și indexuri — prea mari pentru git.
+# ─────────────────────────────────────────────────────────────
+models/
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+chroma_db/
+qdrant_storage/
+.vectorstore/
+*.faiss
+*.index
+
+# ─────────────────────────────────────────────────────────────
+# Editoare și IDE
+# ─────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.fleet/
+
+# ─────────────────────────────────────────────────────────────
+# Sistem de operare
+# ─────────────────────────────────────────────────────────────
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─────────────────────────────────────────────────────────────
+# Zgomot general
+# ─────────────────────────────────────────────────────────────
 *.log
 *.tmp
+*.bak
+.cache/
+tmp/
+temp/
