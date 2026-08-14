@@ -93,3 +93,12 @@ button:disabled { opacity: .5; cursor: default; }
 
 footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
          font-size: 13px; color: var(--ink-soft); }
+
+.incarcare { margin: -18px 0 30px; }
+.incarcare label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 15px; border: 1px dashed var(--line); border-radius: var(--radius);
+  cursor: pointer; font-size: 14px; color: var(--ink-soft);
+}
+.incarcare label:hover { border-color: var(--accent); color: var(--accent); }
+.incarcare input[type=file] { font-size: 13px; max-width: 220px; }

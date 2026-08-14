@@ -23,7 +23,9 @@ from pathlib import Path
 import httpx
 import numpy as np
 
-OLLAMA = "http://10.0.1.123:11434"
+import os
+
+OLLAMA = os.environ.get("OLLAMA_URL", "http://10.0.1.123:11434")
 MODEL = "bge-m3"
 DIM = 1024
 # Cat text de articol intra in embedding. Articolele lungi din Codul fiscal

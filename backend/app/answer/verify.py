@@ -35,8 +35,22 @@ import httpx
 
 from ..search.retrieve import Rezultat
 
-OLLAMA = "http://10.0.1.123:11434"
-MODEL_IMPLICIT = "llama3.1:8b"
+import os
+
+OLLAMA = os.environ.get("OLLAMA_URL", "http://10.0.1.123:11434")
+
+# Modelele de verificare, configurabile fara atingerea codului.
+#
+# De ce doua variabile si nu una: independenta verificatorilor creste daca
+# ruleaza pe modele DIFERITE. Doua instante ale aceluiasi model gresesc corelat,
+# ceea ce face din "doi verificatori" o formalitate.
+#
+# Verificarea e locul unde judecata conteaza cel mai mult si unde un model slab
+# se vede imediat: masurat pe llama3.1:8b, respingea reformulari corecte cu
+# motive de tipul "nu se regaseste in extras, dar este o traducere a acesteia".
+# Generarea poate ramane pe un model mic; verificarea nu.
+MODEL_IMPLICIT = os.environ.get("MODEL_VERIFICATOR", "llama3.1:8b")
+MODEL_V2 = os.environ.get("MODEL_VERIFICATOR_2", MODEL_IMPLICIT)
 
 PROMPT_ANCORARE = """Verifici daca fiecare afirmatie de fond dintr-un raspuns se regaseste in extrasele date.
 
@@ -165,7 +179,7 @@ def verifica_infirmare(intrebare: str, raspuns: str, surse: list[Rezultat], *,
 
 def verifica_tot(intrebare: str, raspuns: str, surse: list[Rezultat], *,
                  model_v1: str = MODEL_IMPLICIT,
-                 model_v2: str = MODEL_IMPLICIT) -> list[Verdict]:
+                 model_v2: str = MODEL_V2) -> list[Verdict]:
     return [
         verifica_ancorare(raspuns, surse, model=model_v1),
         verifica_infirmare(intrebare, raspuns, surse, model=model_v2),

@@ -28,7 +28,9 @@ import httpx
 
 from ..search.retrieve import Rezultat
 
-OLLAMA = "http://10.0.1.123:11434"
+import os
+
+OLLAMA = os.environ.get("OLLAMA_URL", "http://10.0.1.123:11434")
 MODEL_GENERARE = "llama3.1:8b"
 
 # Trimiteri juridice scrise de model.

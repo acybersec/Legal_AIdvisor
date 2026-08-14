@@ -22,12 +22,49 @@ const EXEMPLE = [
   "Cat este salariul minim brut in 2026, in lei?",
 ];
 
+type ClauzaAnalizata = {
+  index: number;
+  fragment: string;
+  acoperita: boolean;
+  observatie: string;
+  surse: { citare: string; cale: string }[];
+};
+
+type Raport = {
+  nume_fisier: string;
+  clauze_analizate: number;
+  clauze_acoperite: number;
+  avertisment: string;
+  rezultate: ClauzaAnalizata[];
+};
+
 export default function Pagina() {
   const [intrebare, setIntrebare] = useState("");
   const [rezultat, setRezultat] = useState<Raspuns | null>(null);
   const [lucreaza, setLucreaza] = useState(false);
   const [eroare, setEroare] = useState("");
   const [stare, setStare] = useState<{ articole: number } | null>(null);
+  const [raport, setRaport] = useState<Raport | null>(null);
+  const [analizeaza, setAnalizeaza] = useState(false);
+
+  async function incarcaDocument(fisier: File) {
+    setAnalizeaza(true);
+    setEroare("");
+    setRaport(null);
+    setRezultat(null);
+    const date = new FormData();
+    date.append("fisier", fisier);
+    try {
+      const r = await fetch(`${API}/analizeaza`, { method: "POST", body: date });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail ?? `Serverul a raspuns ${r.status}`);
+      setRaport(d);
+    } catch (e) {
+      setEroare(e instanceof Error ? e.message : "Eroare la analiza documentului");
+    } finally {
+      setAnalizeaza(false);
+    }
+  }
 
   useEffect(() => {
     fetch(`${API}/sanatate`)
@@ -106,11 +143,63 @@ export default function Pagina() {
         ))}
       </div>
 
+      <div className="incarcare">
+        <label>
+          <input
+            type="file"
+            accept=".pdf,.docx,.txt,.md"
+            disabled={analizeaza || lucreaza}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) incarcaDocument(f);
+              e.target.value = "";
+            }}
+          />
+          <span>
+            {analizeaza
+              ? "Analizez documentul, dureaza cateva minute..."
+              : "sau incarca un contract: PDF, DOCX, TXT"}
+          </span>
+        </label>
+      </div>
+
       {eroare && (
         <div className="card refuz">
-          <div className="eticheta">Eroare de conexiune</div>
+          <div className="eticheta">Eroare</div>
           <p className="raspuns">{eroare}</p>
         </div>
+      )}
+
+      {raport && (
+        <>
+          <div className="card">
+            <div className="eticheta">Analiza document</div>
+            <p className="raspuns">
+              {raport.nume_fisier} — {raport.clauze_analizate} clauze analizate,{" "}
+              {raport.clauze_acoperite} cu temei legal identificat.
+            </p>
+            <p className="motiv">{raport.avertisment}</p>
+          </div>
+          {raport.rezultate.map((c) => (
+            <div className={`card${c.acoperita ? "" : " refuz"}`} key={c.index}>
+              <div className="eticheta">
+                Clauza {c.index} · {c.acoperita ? "temei identificat" : "neacoperita"}
+              </div>
+              <div className="extras" style={{ marginBottom: 12 }}>
+                {c.fragment}
+              </div>
+              <p className="raspuns" style={{ fontSize: 16 }}>
+                {c.observatie}
+              </p>
+              {c.surse.map((s) => (
+                <div className="sursa" key={s.citare}>
+                  <div className="citare">{s.citare}</div>
+                  <div className="cale">{s.cale}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
       )}
 
       {rezultat && (
