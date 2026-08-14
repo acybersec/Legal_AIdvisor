@@ -110,6 +110,16 @@ Lista e completă și onestă. Citește-o înainte de a promite ceva unui client
   Reingestia e manuală.
 - **Fără reranker.** Cazurile unde mai multe articole vorbesc despre același subiect, iar cel
   care îl *definește* nu e distinctiv lexical, rămân o slăbiciune cunoscută.
+- **Analiza de document este sincronă și lentă.** Fiecare clauză costă un apel de generare plus
+  două de verificare, aproximativ 20 de secunde pe modelul local. Implicit se analizează 6
+  clauze, deci în jur de 2 minute per document. Pentru producție e nevoie de job asincron cu
+  identificator și interogare de stare, nu de un număr mai mic de clauze.
+- **Interfața nu a fost verificată vizual.** Build-ul trece și serverul întoarce HTTP 200 cu
+  conținutul așteptat, dar nimeni nu a văzut pagina randată. Aspectul, tema întunecată și
+  comportamentul pe ecran îngust sunt neverificate.
+- **`docker compose` nu a fost rulat.** Docker nu era instalat pe mașina de dezvoltare.
+  Fișierele sunt scrise, dar un build netestat ascunde de regulă cel puțin o eroare. Rularea
+  locală, fără Docker, este calea verificată.
 - **`llama3.1:8b` e modest pe română juridică.** Răspunsurile sunt corecte dar seci. Un model
   mai puternic ar îmbunătăți vizibil calitatea, fără schimbări de arhitectură.
 

@@ -20,6 +20,7 @@ import json
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from pathlib import Path
 
 from app.answer.pipeline import Pipeline
@@ -51,12 +52,23 @@ def ruleaza(limita: int | None = None) -> dict:
 
     pipe = Pipeline(ROOT / "data" / "legal.db", ROOT / "data" / "vectors.npz")
 
+    total = len(cazuri)
+    facute = 0
+    lock = Lock()
+
     def _unul(caz: Caz):
+        nonlocal facute
         try:
             rez = pipe.raspunde(caz.intrebare)
+            eticheta, detaliu = _clasifica(caz, rez)
         except Exception as exc:  # nu ascundem esecurile de infrastructura
-            return caz, "EROARE", f"{type(exc).__name__}: {exc}"[:120], None
-        eticheta, detaliu = _clasifica(caz, rez)
+            eticheta, detaliu, rez = "EROARE", f"{type(exc).__name__}: {exc}"[:120], None
+        # Progres incremental: o rulare de zeci de minute fara semne de viata
+        # nu se poate distinge de una blocata.
+        with lock:
+            facute += 1
+            print(f"[{facute:3d}/{total}] {eticheta:<9} {caz.id:<12} {caz.intrebare[:52]}",
+                  flush=True)
         return caz, eticheta, detaliu, rez
 
     with ThreadPoolExecutor(max_workers=CONCURENTA) as pool:

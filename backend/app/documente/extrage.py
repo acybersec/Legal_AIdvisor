@@ -70,7 +70,20 @@ def extrage_text(nume_fisier: str, continut: bytes) -> str:
     return text
 
 
-def imparte_in_clauze(text: str, *, min_len: int = 120, maxim: int = 12) -> list[Clauza]:
+# Cate clauze analizam implicit dintr-un document.
+#
+# Fiecare clauza costa un apel de generare plus doua de verificare. Pe modelul
+# local asta inseamna aproximativ 20 de secunde per clauza, deci 12 clauze fac
+# o cerere HTTP sincrona de patru minute, pe care orice client o taie prin
+# timeout. Sase clauze incap in ~2 minute si raman utile pentru un demo.
+#
+# Solutia corecta pentru productie NU este un numar mai mic, ci un job asincron
+# cu identificator si interogare de stare. Nu e in MVP, si e notat in README.
+MAX_CLAUZE_IMPLICIT = 6
+
+
+def imparte_in_clauze(text: str, *, min_len: int = 120,
+                      maxim: int = MAX_CLAUZE_IMPLICIT) -> list[Clauza]:
     """Sparge documentul in unitati analizabile.
 
     Preferam granitele naturale, articol sau clauza numerotata, si cadem pe

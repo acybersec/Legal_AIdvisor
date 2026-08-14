@@ -73,9 +73,9 @@ class Pipeline:
             return RezultatFinal(intrebare, MESAJ_REFUZ, True,
                                  "raspunsul nu a citat nicio sursa", candidati=hits)
 
-        # Verificatorii primesc textul BRUT, cu marcajele [Sn] intacte. Vezi
-        # nota din verify._extrase: textul cu citari legate ii facea sa respinga
-        # raspunsuri corecte, judecand datele actelor drept afirmatii de fond.
+        # `gen.text_brut` are marcajele deja COMPACTATE pe `gen.surse`, deci
+        # numerotarea vazuta de verificator se potriveste cu cea din raspuns,
+        # fara sa ii trimitem tot setul regasit. Vezi `compacteaza_marcaje`.
         verdicte = verifica_tot(
             intrebare, gen.text_brut, gen.surse,
             **({"model_v2": self.model_v2} if self.model_v2 else {}),

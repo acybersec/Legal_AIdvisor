@@ -182,3 +182,59 @@ def test_toate_formele_flexionare_de_trimitere_sunt_prinse(formulare):
     """Romana flexioneaza. O garda care prinde doar nominativul nu e o garda."""
     surse = [sursa("145", "Durata minima este de 20 de zile lucratoare.")]
     assert detecteaza_citari_inventate(formulare, surse), formulare
+
+
+def test_numerotarea_surselor_pentru_verificatori_o_urmeaza_pe_cea_a_modelului():
+    """Verificatorii trebuie sa vada aceeasi numerotare ca generatorul.
+
+    Daca modelul citeaza doar [S3], iar verificatorului i se dau doar sursele
+    citate, acelea se renumeroteaza de la [S1] si marcajul [S3] din raspuns nu
+    mai are corespondent. Rezultatul e un refuz fals pe un raspuns corect.
+    """
+    from app.answer.verify import _extrase
+
+    candidati = [sursa("10", "primul"), sursa("20", "al doilea"), sursa("30", "al treilea")]
+    text = _extrase(candidati)
+    assert "[S1]" in text and "[S2]" in text and "[S3]" in text
+    # al treilea candidat trebuie sa fie [S3], nu [S1]
+    pozitie_s3 = text.index("[S3]")
+    assert "al treilea" in text[pozitie_s3:]
+
+
+def test_ordinea_inversata_pastreaza_numerele_originale():
+    """Al doilea verificator primeste sursele in ordine inversa, dar cu aceleasi numere."""
+    from app.answer.verify import _extrase
+
+    candidati = [sursa("10", "primul"), sursa("20", "al doilea")]
+    text = _extrase(candidati, inversat=True)
+    assert text.index("[S2]") < text.index("[S1]")  # ordine inversata
+    pozitie_s1 = text.index("[S1]")
+    assert "primul" in text[pozitie_s1:]  # dar [S1] e tot primul candidat
+
+
+def test_compactarea_renumeroteaza_marcajele_pe_sursele_citate():
+    """Modelul citeaza [S3]; verificatorul trebuie sa primeasca [S1] si sursa 3."""
+    from app.answer.generate import compacteaza_marcaje
+
+    candidati = [sursa("10", "primul"), sursa("20", "al doilea"), sursa("30", "al treilea")]
+    text, folosite = compacteaza_marcaje("Afirmatie [S3].", candidati)
+    assert text == "Afirmatie [S1]."
+    assert [f.numar for f in folosite] == ["30"]
+
+
+def test_compactarea_pastreaza_ordinea_si_mapeaza_corect_mai_multe_surse():
+    from app.answer.generate import compacteaza_marcaje
+
+    candidati = [sursa("10", "a"), sursa("20", "b"), sursa("30", "c"), sursa("40", "d")]
+    text, folosite = compacteaza_marcaje("Unu [S2]. Doi [S4]. Trei [S2].", candidati)
+    assert text == "Unu [S1]. Doi [S2]. Trei [S1]."
+    assert [f.numar for f in folosite] == ["20", "40"]
+
+
+def test_compactarea_elimina_marcajele_catre_surse_inexistente():
+    from app.answer.generate import compacteaza_marcaje
+
+    candidati = [sursa("10", "a")]
+    text, folosite = compacteaza_marcaje("Afirmatie [S9].", candidati)
+    assert "S9" not in text
+    assert folosite == []
