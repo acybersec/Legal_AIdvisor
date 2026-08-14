@@ -1,0 +1,36 @@
+# Secrete — repo PUBLIC, nimic din astea nu intră niciodată în istoric.
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*credentials*
+*secret*
+*token*
+
+# Dependențe și build.
+node_modules/
+.next/
+dist/
+build/
+out/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.turbo/
+.cache/
+coverage/
+
+# Date de client / documente juridice — nu se publică.
+data/
+clients/
+*.dump
+*.sql
+*.sqlite
+
+# Zgomot de sistem.
+.DS_Store
+*.log
+*.tmp
