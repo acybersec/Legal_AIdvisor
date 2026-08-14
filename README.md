@@ -69,13 +69,76 @@ cd frontend && npm install && npm run build && npx next start
 
 ### Modele
 
-| Rol | Model | Unde |
+| Rol | Model | De ce acesta |
 |---|---|---|
-| Embeddings | `bge-m3`, multilingv, 1024 dimensiuni | Ollama, local |
-| Generare | `llama3.1:8b` | Ollama, local |
-| Verificare | `llama3.1:8b` | Ollama, local |
+| Embeddings | `bge-m3`, 1024 dim | multilingv; modelele antrenate pe engleză sunt slabe pe română juridică |
+| Generare | `llama3.1:8b` | fluența costă puțin; două propoziții corecte în română nu cer un model mare |
+| Verificare, ancorare | `qwen3:30b` | aici se decide dacă un răspuns pleacă la client |
+| Verificare, adversarial | `llama3.1:8b` | caută erori; un model suspicios e acceptabil în rolul ăsta |
 
-Adresa Ollama se schimbă din `OLLAMA_URL`. Documentele utilizatorului **nu părăsesc mașina**.
+**Cei doi verificatori rulează pe modele diferite, deliberat.** Două instanțe ale aceluiași
+model greșesc corelat, ceea ce face din „doi verificatori independenți" o formalitate.
+
+Repartizarea vine dintr-o măsurătoare, nu dintr-o preferință: refuzurile false observate veneau
+aproape toate de la verificatorul de ancorare, care cerea potrivire literală și respingea
+reformulări corecte, cu motive de tipul *„nu se regăsește în extras, dar este o traducere a
+acesteia"*. Acolo a mers modelul puternic.
+
+Costul: verificarea de ancorare durează aproximativ 34 de secunde, față de câteva secunde pe
+modelul mic.
+
+> ### ⚠️ Cifrele de performanță din acest document sunt măsurate pe CPU
+>
+> Mașina de inferență are o GTX 5090, dar Ollama de pe ea **nu o folosește**. Verificat în
+> timpul unei generări active: `size_vram` este `0.0 GB` pentru toate modelele încărcate, deși
+> suma cerută, 27,2 GB, încape în cei 32 ai plăcii.
+>
+> ```bash
+> curl -s http://<gazda>:11434/api/ps | python3 -m json.tool | grep size_vram
+> ```
+>
+> Toate duratele de mai jos — 34 de secunde per verificare, minute per document — descriu
+> inferență pe procesor. Pe GPU, aceleași modele sunt de ordinul zecilor de ori mai rapide.
+>
+> **De verificat pe mașina de inferență:** drivere CUDA instalate, Ollama compilat cu suport
+> GPU, și dacă rulează într-un container care nu vede placa.
+>
+> Merită știut și pentru diagnostic: am schimbat modelul de verificare de la 30B la 14B crezând
+> că rezolv o depășire de VRAM. Depășirea era de RAM de sistem. Diagnosticul era greșit, chiar
+> dacă reparația s-a nimerit utilă — pe CPU un model mai mic chiar e mai rapid.
+
+### Două capcane care arată exact ca defecțiuni
+
+**Modelele cu mod de gândire** — `qwen3` între ele — consumă tot bugetul de tokeni pe raționament
+intern și întorc răspuns **gol** dacă nu le dezactivezi explicit. Măsurat: 48 de secunde și zero
+caractere. De aceea fiecare cerere de verificare trimite `think: false`.
+
+**Dimensiunea pe disc nu prezice dimensiunea în VRAM.** `qwen3:30b` are 18,6 GB pe disc și cere
+**33 GB** încărcat — nu încape pe o placă de 32 GB, nici cu `num_ctx` redus la 4096. Arhitectura
+MoE se extinde la încărcare.
+
+Ollama nu refuză cererea: împinge straturi pe CPU și continuă. Rezultatul a fost o evaluare care
+a procesat **un singur caz în 18 minute**, fără nicio eroare în log. Arăta identic cu un blocaj
+de cod.
+
+Diagnosticul care economisește ore: când o sarcină pe GPU e absurd de lentă **fără să dea
+erori**, verifică întâi memoria, nu logica.
+
+```bash
+curl -s http://<gazda>:11434/api/ps | python3 -m json.tool   # suma campurilor size
+```
+
+Dacă suma depășește VRAM-ul fizic, ai găsit cauza.
+
+Se schimbă din mediu, fără atingerea codului:
+
+```bash
+OLLAMA_URL=http://10.0.1.123:11434
+MODEL_VERIFICATOR=qwen3:30b        # ancorare
+MODEL_VERIFICATOR_2=llama3.1:8b    # adversarial
+```
+
+Documentele utilizatorului **nu părăsesc mașina**.
 
 ## Cum se evită răspunsurile false
 

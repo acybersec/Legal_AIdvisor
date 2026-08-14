@@ -56,14 +56,24 @@ def analizeaza(pipe: Pipeline, nume_fisier: str, text: str,
                clauze: list[Clauza]) -> RaportDocument:
     rezultate: list[ClauzaAnalizata] = []
     for clauza in clauze:
-        rez = pipe.raspunde(_intrebare_din_clauza(clauza))
+        # Regasirea foloseste TEXTUL CLAUZEI, nu intrebarea invelitoare.
+        # Motivul, masurat: invelisul "Ce prevede legislatia romaneasca in
+        # legatura cu urmatoarea clauza" dilueaza embedding-ul cu cuvinte
+        # generice si scade calitatea regasirii. Clauza in sine e o interogare
+        # semantica mult mai buna, pentru ca vorbeste despre subiectul ei.
+        rez = pipe.raspunde(
+            _intrebare_din_clauza(clauza), interogare_regasire=clauza.text[:600]
+        )
         if rez.a_refuzat:
             rezultate.append(
                 ClauzaAnalizata(
                     index=clauza.index,
                     fragment=clauza.text[:180],
                     acoperita=False,
-                    observatie="Nu am identificat temei legal verificabil in corpusul indexat.",
+                    # Motivul REAL, nu unul generic. Un raport care ascunde de ce
+                    # a refuzat sistemul nu se poate depana si nu se poate crede.
+                    observatie=f"Fara temei legal verificabil. Motiv: {rez.motiv_refuz}",
+                    surse=rez.candidati[:3],
                 )
             )
         else:

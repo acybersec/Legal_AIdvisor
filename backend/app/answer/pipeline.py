@@ -49,11 +49,42 @@ class Pipeline:
         self.k = k
         self.model_v2 = model_v2
 
-    def raspunde(self, intrebare: str) -> RezultatFinal:
-        hits = self.retriever.cauta(intrebare, k=self.k)
+    def raspunde(self, intrebare: str, *,
+                 interogare_regasire: str | None = None) -> RezultatFinal:
+        """Raspunde la o intrebare, ancorat in corpus.
+
+        `interogare_regasire` separa CE cautam de CE intrebam. Sunt lucruri
+        diferite cand intrebarea are un invelis lung: la analiza de document,
+        textul clauzei e o interogare semantica buna, iar intrebarea construita
+        in jurul ei contine cuvinte generice care dilueaza embedding-ul.
+        """
+        hits = self.retriever.cauta(interogare_regasire or intrebare, k=self.k)
         if not hits:
             return RezultatFinal(intrebare, MESAJ_REFUZ, True,
                                  "regasirea nu a intors niciun articol")
+
+        # Cale determinista pentru trimiteri explicite.
+        #
+        # Cand utilizatorul cere "ce prevede articolul 145 din Codul muncii",
+        # raspunsul corect ESTE textul articolului. Trecerea lui printr-un model
+        # ca sa fie reformulat adauga risc de halucinatie pentru zero castig:
+        # nu exista sinteza de facut, doar un text de redat.
+        #
+        # Rezultatul e un raspuns instantaneu, imposibil de halucinat, si o
+        # scutire de trei apeluri de model per interogare. Nu folosim un model
+        # acolo unde nu avem nevoie de unul.
+        if hits[0].sursa == "explicit" and interogare_regasire is None:
+            a = hits[0]
+            return RezultatFinal(
+                intrebare,
+                f"{a.text}\n\n({a.citare})",
+                False,
+                "",
+                [a],
+                [Verdict("determinist", True,
+                         "text redat din baza, fara interventia unui model")],
+                hits,
+            )
 
         gen: Raspuns = genereaza(intrebare, hits)
 

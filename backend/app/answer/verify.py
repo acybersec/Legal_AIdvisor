@@ -49,8 +49,18 @@ OLLAMA = os.environ.get("OLLAMA_URL", "http://10.0.1.123:11434")
 # se vede imediat: masurat pe llama3.1:8b, respingea reformulari corecte cu
 # motive de tipul "nu se regaseste in extras, dar este o traducere a acesteia".
 # Generarea poate ramane pe un model mic; verificarea nu.
-MODEL_IMPLICIT = os.environ.get("MODEL_VERIFICATOR", "llama3.1:8b")
-MODEL_V2 = os.environ.get("MODEL_VERIFICATOR_2", MODEL_IMPLICIT)
+# Repartizarea nu e arbitrara. Refuzurile false masurate veneau aproape toate
+# de la verificatorul de ANCORARE, care cerea potrivire literala si respingea
+# reformulari corecte. Acolo merge modelul puternic.
+#
+# Verificatorul adversarial ramane pe modelul mic: sarcina lui e sa caute
+# erori, iar un model mic inclinat spre suspiciune e acceptabil acolo unde
+# prudenta in exces costa mai putin decat increderea in exces.
+#
+# Efectul secundar util: cei doi difera acum si ca framing, si ca model. Doua
+# instante ale aceluiasi model gresesc corelat.
+MODEL_IMPLICIT = os.environ.get("MODEL_VERIFICATOR", "qwen3:14b")
+MODEL_V2 = os.environ.get("MODEL_VERIFICATOR_2", "llama3.1:8b")
 
 PROMPT_ANCORARE = """Verifici daca fiecare afirmatie de fond dintr-un raspuns se regaseste in extrasele date.
 
@@ -105,7 +115,18 @@ def _cere_json(prompt: str, model: str, timeout: float = 240.0) -> dict:
     r = httpx.post(
         f"{OLLAMA}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False, "format": "json",
-              "options": {"temperature": 0.0, "num_predict": 400}},
+              # Modelele cu mod de gandire, precum qwen3, isi consuma altfel tot
+              # bugetul de tokeni pe rationament intern si intorc raspuns GOL.
+              # Masurat: 48s si zero caractere. Campul e ignorat de modelele
+              # care nu il suporta, deci e sigur sa il trimitem mereu.
+              "think": False,
+              # num_ctx explicit, altfel modelul isi rezerva fereastra maxima si
+              # cache-ul KV umfla amprenta peste VRAM-ul disponibil.
+              # Masurat: qwen3:30b raporta 33,6 GB pe o placa de 32 GB, iar
+              # Ollama impingea straturi pe CPU. Rezultat: 18 minute si ZERO
+              # cazuri procesate, ceea ce arata identic cu un blocaj.
+              # Prompturile noastre de verificare stau sub 4000 de tokeni.
+              "options": {"temperature": 0.0, "num_predict": 400, "num_ctx": 4096}},
         timeout=timeout,
     )
     r.raise_for_status()
