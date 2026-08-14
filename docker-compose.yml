@@ -1,0 +1,36 @@
+# Legal_AIdvisor - MVP local. Fara autentificare, conform brief.
+#
+# Ollama NU e in compose: ruleaza pe masina cu GPU, la 10.0.1.123. Containerele
+# o vad prin reteaua locala. Adresa se schimba din OLLAMA_URL.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Corpusul si indexul, generate de ingestie. Montate, nu copiate.
+      - ./data:/app/data:ro
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://10.0.1.123:11434}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8000/sanatate')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      API_URL: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
