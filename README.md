@@ -201,16 +201,29 @@ Toate de mai jos vin din rulări reale, încheiate. Ce nu s-a măsurat e spus ca
 
 | Tip de caz | Cazuri | Corect | **Răspuns fals** | Refuz corect | Refuz greșit |
 |---|---:|---:|---:|---:|---:|
-| Conținut, întrebare naturală | 20 | 18 | **2** | — | 0 |
+| Conținut, întrebare naturală | 20 | 17 | **2** | — | 1 |
 | Lookup, trimitere la articol | 75 | 75 | **0** | — | 0 |
 | Trebuia refuzat | 10 | — | **0** | 10 | — |
-| **Total** | **105** | **93** | **2 = 1,9%** | **10/10** | **0** |
+| **Total** | **105** | **92** | **2 = 1,9%** | **10/10** | **1** |
 
 Cifra care contează pentru un produs juridic este a treia coloană. Un refuz costă un client
 nemulțumit; un răspuns fals costă un client care ia o decizie greșită și dă vina pe tine.
 
-**Zero refuzuri false și 10 din 10 refuzuri corecte** — sistemul tace exact când trebuie și
-numai când trebuie.
+**10 din 10 refuzuri corecte.** Sistemul tace când trebuie.
+
+### De ce cifra asta e o măsurătoare și nu un eșantion
+
+Generarea rulează la **temperatura zero**, deci sistemul e determinist: aceeași întrebare dă
+același răspuns, verificat prin rulări repetate.
+
+Nu a fost întotdeauna așa, iar descoperirea merită reținută. La temperatura 0,2, două rulări ale
+aceluiași cod, fără nicio modificare între ele, au dat **2 răspunsuri false și zero refuzuri
+false** într-una și **3 și 3** în cealaltă. O variație de până la 3 cazuri din 20 e exact
+ordinul de mărime al diferențelor pe care le compari când decizi între două variante de sistem.
+
+Cu alte cuvinte: fără determinism, jumătate din concluziile pe care le tragi dintr-o singură
+rulare sunt zgomot. Iar pentru client, câștigul e și mai direct — *„ieri mi-a spus altceva"* e o
+conversație care n-are ce căuta într-un produs juridic.
 
 Ce sunt cele două răspunsuri false, examinate individual:
 
@@ -219,9 +232,9 @@ Ce sunt cele două răspunsuri false, examinate individual:
   corect juridic; setul aștepta art. 144, care spune același lucru mai direct. Etichetă strictă,
   nu defect.
 - *„Ce se consideră timp de muncă?"* — a redat **definiția din art. 111 dar a atribuit-o
-  art. 113**. Ăsta e un defect real de regăsire, exact slăbiciunea documentată mai jos la
-  *Fără reranker*: articolul care **definește** un termen nu e lexical distinctiv față de cele
-  care îl folosesc.
+  art. 113**. Defect real de regăsire: articolul care **definește** un termen nu e lexical
+  distinctiv față de cele care îl folosesc. BM25 premiază frecvența, iar o definiție enunță
+  termenul o singură dată. Vezi *De ce stratul 6 există* mai sus.
 
 ### Regăsire — suita completă, 95 de cazuri, rulare încheiată
 
