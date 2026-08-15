@@ -413,3 +413,21 @@ def test_cauta_refuza_valorile_la_zi_fara_sa_atinga_modelul(monkeypatch, tmp_pat
 
     assert r.cauta("Cat este salariul minim brut pe economie in 2026, in lei?") == []
     assert r.cauta("Cat este cota de TVA redusa in acest moment?") == []
+
+
+def test_generarea_e_determinista_implicit():
+    """Temperatura implicita trebuie sa fie ZERO.
+
+    Nu e o reglare fina. La 0,2, aceeasi intrebare producea patru texte diferite
+    in patru rulari, iar una dintre ele cita o singura sursa in loc de doua. Un
+    client care intreaba acelasi lucru de doua ori si primeste doua raspunsuri
+    nu poate avea incredere in niciunul.
+
+    Testul apara si masuratorile: fara determinism, orice comparatie intre doua
+    variante ale sistemului masoara si zgomotul.
+    """
+    from app.answer.generate import TEMPERATURA, genereaza
+    import inspect
+
+    assert TEMPERATURA == 0.0
+    assert inspect.signature(genereaza).parameters["temperatura"].default == 0.0

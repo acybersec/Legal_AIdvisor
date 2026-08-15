@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 # VRAM. Aici concurenta chiar aduce debit.
 #
 # Pe CPU: pune 1.
-CONCURENTA = 3
+CONCURENTA = 1
 
 
 def _clasifica(caz: Caz, rez) -> tuple[str, str]:

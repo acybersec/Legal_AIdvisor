@@ -180,8 +180,27 @@ def leaga_citari(text: str, rezultate: list[Rezultat]) -> tuple[str, list[Rezult
     return legat.strip(), [folosite[i] for i in sorted(folosite)]
 
 
+# Temperatura ZERO, si nu e o reglare fina, e o cerinta de produs.
+#
+# La 0,2 aceeasi intrebare producea alt raspuns la fiecare rulare. Masurat pe
+# "Cat este preavizul la concediere", patru rulari au dat patru texte diferite,
+# iar a patra a citat o singura sursa in loc de doua. La 0,0: patru rulari,
+# text identic, aceeasi sursa.
+#
+# De ce conteaza pentru un produs juridic, nu doar pentru masuratori: un client
+# care intreaba acelasi lucru de doua ori si primeste doua raspunsuri nu poate
+# avea incredere in niciunul, si nu poate fi ajutat cand suna sa reclame ceva.
+# "Ieri mi-a spus altceva" e o conversatie care nu trebuie sa existe.
+#
+# Efectul secundar, la fel de important: fara determinism, orice comparatie
+# intre doua variante ale sistemului masoara si zgomotul. O rulare de 105 cazuri
+# varia cu pana la 3 cazuri fara nicio schimbare de cod, adica exact ordinul de
+# marime al diferentelor pe care le comparam.
+TEMPERATURA = 0.0
+
+
 def genereaza(intrebare: str, rezultate: list[Rezultat], *,
-              model: str = MODEL_GENERARE, temperatura: float = 0.2,
+              model: str = MODEL_GENERARE, temperatura: float = TEMPERATURA,
               timeout: float = 600.0) -> Raspuns:
     if not rezultate:
         return Raspuns(text="", text_brut="", insuficient=True)
