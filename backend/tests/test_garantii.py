@@ -238,3 +238,21 @@ def test_compactarea_elimina_marcajele_catre_surse_inexistente():
     text, folosite = compacteaza_marcaje("Afirmatie [S9].", candidati)
     assert "S9" not in text
     assert folosite == []
+
+
+def test_referirea_corecta_la_articolul_primit_nu_e_inventie():
+    """Textul unui articol nu isi repeta propriul numar; acela e in eticheta.
+
+    Bug masurat: 5 din 7 refuzuri false pe o rulare de 30 de cazuri erau
+    raspunsuri corecte, respinse fiindca citau corect articolul primit.
+    """
+    s = sursa("44", "Delegarea poate fi dispusa pentru cel mult 60 de zile.",
+              citare="Articolul 44 din CODUL MUNCII")
+    assert detecteaza_citari_inventate("Conform articolului 44, delegarea [S1].", [s]) == []
+    assert detecteaza_citari_inventate("Vezi art. 44 [S1].", [s]) == []
+
+
+def test_referirea_la_un_articol_care_nu_a_fost_dat_ramane_inventie():
+    s = sursa("44", "Delegarea poate fi dispusa pentru cel mult 60 de zile.",
+              citare="Articolul 44 din CODUL MUNCII")
+    assert detecteaza_citari_inventate("Conform articolului 999 [S1].", [s])

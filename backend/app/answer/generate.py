@@ -45,9 +45,9 @@ MODEL_GENERARE = "llama3.1:8b"
 _CITARE_INVENTATA = re.compile(
     r"\b(?:art\.?|articol(?:ul(?:ui)?|e(?:le|lor)?)?"
     r"|alin\.?|alineat(?:ul(?:ui)?|e(?:le|lor)?)?)"
-    r"\s*\.?\s*\d"
-    r"|\b(?:legea|legii|codul|codului)\s+(?:nr\.?\s*)?\d"
-    r"|\bnr\.?\s*\d+\s*/\s*\d{4}",
+    r"\s*\.?\s*(?P<numar>\d+(?:\^\d+)?)"
+    r"|\b(?:legea|legii|codul|codului)\s+(?:nr\.?\s*)?(?P<lege>\d+)"
+    r"|\bnr\.?\s*(?P<nr>\d+)\s*/\s*\d{4}",
     re.IGNORECASE,
 )
 
@@ -99,25 +99,32 @@ def _normalizeaza_trimitere(t: str) -> str:
 
 
 def detecteaza_citari_inventate(text: str, surse: list[Rezultat]) -> list[str]:
-    """Trimiteri juridice scrise de model care NU exista in sursele date.
+    """Trimiteri juridice scrise de model care NU corespund surselor primite.
 
-    Nuanta care conteaza: textele de lege sunt pline de trimiteri interne, de
-    tipul "concediat in temeiul art. 61 lit. c)". Cand modelul reda corect un
-    articol, reproduce si aceste trimiteri. Ele NU sunt inventii.
+    Doua nuante, ambele descoperite prin masurare, ambele producand refuzuri
+    false pe raspunsuri corecte:
 
-    Fara filtrul asta, garda ISC-3 respingea raspunsuri corecte pentru ca
-    citasera fidel legea. Masurat: 2 din 12 cazuri, respinse pe nedrept.
+    1. Textele de lege sunt pline de trimiteri interne, "in temeiul art. 61
+       lit. c)". Cand modelul reda corect un articol, le reproduce. Nu sunt
+       inventii.
 
-    Deci semnalam doar trimiterile absente din textul surselor. Aceea e
-    definitia utila a inventiei: modelul a scris o referinta pe care nimeni nu
-    i-a dat-o.
+    2. Textul unui articol NU isi repeta propriul numar; acela sta in eticheta.
+       Deci "Conform articolului 44" era declarat inventie chiar cand [S1] ERA
+       articolul 44. Masurat: 5 din 7 refuzuri false dintr-o rulare de 30.
+
+    Comparam deci NUMERELE, nu sirurile: un numar e legitim daca e numarul unui
+    articol primit sau daca apare in textul vreunei surse. Restul e inventie.
     """
-    corp_surse = _normalizeaza_trimitere(" ".join(s.text for s in surse))
+    numere_surse = {s.numar for s in surse}
+    corp = " ".join(s.text for s in surse)
+    numere_din_text = set(re.findall(r"\d+(?:\^\d+)?", corp))
+    permise = numere_surse | numere_din_text
+
     inventate = []
     for m in _CITARE_INVENTATA.finditer(text):
-        bucata = m.group(0).strip()
-        if _normalizeaza_trimitere(bucata) not in corp_surse:
-            inventate.append(bucata)
+        numar = m.group("numar") or m.group("lege") or m.group("nr")
+        if numar and numar not in permise:
+            inventate.append(m.group(0).strip())
     return inventate
 
 
@@ -187,6 +194,12 @@ def genereaza(intrebare: str, rezultate: list[Rezultat], *,
     r = httpx.post(
         f"{OLLAMA}/api/generate",
         json={"model": model, "prompt": prompt, "stream": False,
+              # Ollama descarca modelul dupa 5 minute de inactivitate, iar
+              # reincarcarea lui costa secunde bune. Pentru un serviciu care
+              # primeste intrebari rar si neregulat, asta inseamna ca prima
+              # intrebare a diminetii e mult mai lenta decat urmatoarele.
+              # Cele trei modele ale lantului incap simultan in VRAM.
+              "keep_alive": "60m",
               "options": {"temperature": temperatura, "num_predict": 500}},
         timeout=timeout,
     )

@@ -40,7 +40,12 @@ def embed(texts: list[str], *, batch: int = 32, timeout: float = 180.0) -> np.nd
     with httpx.Client(timeout=timeout) as client:
         for i in range(0, len(texts), batch):
             chunk = texts[i : i + batch]
-            r = client.post(f"{OLLAMA}/api/embed", json={"model": MODEL, "input": chunk})
+            # keep_alive: vezi nota din answer/generate.py. Aici conteaza cel
+            # mai mult, fiindca modelul de embedding e primul apelat la fiecare
+            # intrebare: daca el e descarcat, utilizatorul asteapta reincarcarea
+            # inainte sa inceapa macar regasirea.
+            r = client.post(f"{OLLAMA}/api/embed",
+                            json={"model": MODEL, "input": chunk, "keep_alive": "60m"})
             r.raise_for_status()
             out.extend(r.json()["embeddings"])
     arr = np.asarray(out, dtype=np.float32)

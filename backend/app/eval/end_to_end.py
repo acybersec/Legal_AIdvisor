@@ -27,16 +27,19 @@ from app.answer.pipeline import Pipeline
 from app.eval.cases import Caz, toate
 
 ROOT = Path(__file__).resolve().parents[3]
-# Serial, nu concurent, si nu din prudenta excesiva.
+# Concurenta se alege dupa unde ruleaza inferenta, nu dupa prudenta.
 #
-# Ollama serializeaza oricum cererile catre acelasi model. Pe inferenta CPU,
-# unde un apel dureaza zeci de secunde, concurenta nu adauga debit: adauga doar
-# cereri care asteapta in coada pana depasesc timeout-ul HTTP. Masurat: cu trei
-# fire, 3 din primele 4 cazuri au esuat cu eroare de retea, desi acelasi caz
-# rulat izolat trece.
+# Pe CPU, unde un apel dureaza zeci de secunde, concurenta nu adauga debit:
+# adauga doar cereri care asteapta in coada pana depasesc timeout-ul HTTP.
+# Masurat atunci: cu trei fire, 3 din primele 4 cazuri au esuat cu eroare de
+# retea, desi acelasi caz rulat izolat trecea.
 #
-# Pe GPU, unde apelurile sunt scurte, o valoare de 3-4 redevine utila.
-CONCURENTA = 1
+# Pe GPU apelurile sunt scurte si coada se goleste. Masurat dupa repararea
+# accelerarii: llama3.1:8b la 229 tokeni/s, qwen3:14b la 153, ambele integral in
+# VRAM. Aici concurenta chiar aduce debit.
+#
+# Pe CPU: pune 1.
+CONCURENTA = 3
 
 
 def _clasifica(caz: Caz, rez) -> tuple[str, str]:

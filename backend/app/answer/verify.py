@@ -129,6 +129,10 @@ def _cere_json(prompt: str, model: str, timeout: float = 600.0) -> dict:
               # Masurat: 48s si zero caractere. Campul e ignorat de modelele
               # care nu il suporta, deci e sigur sa il trimitem mereu.
               "think": False,
+              # Vezi nota din generate.py: fara asta, modelul de verificare se
+              # descarca dupa 5 minute si prima intrebare de dupa o pauza costa
+              # o reincarcare in plus.
+              "keep_alive": "60m",
               # num_ctx explicit, altfel modelul isi rezerva fereastra maxima si
               # cache-ul KV umfla amprenta peste VRAM-ul disponibil.
               # Masurat: qwen3:30b raporta 33,6 GB pe o placa de 32 GB, iar

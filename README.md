@@ -73,8 +73,11 @@ cd frontend && npm install && npm run build && npx next start
 |---|---|---|
 | Embeddings | `bge-m3`, 1024 dim | multilingv; modelele antrenate pe engleză sunt slabe pe română juridică |
 | Generare | `llama3.1:8b` | fluența costă puțin; două propoziții corecte în română nu cer un model mare |
-| Verificare, ancorare | `qwen3:30b` | aici se decide dacă un răspuns pleacă la client |
+| Verificare, ancorare | `qwen3:14b` | aici se decide dacă un răspuns pleacă la client |
 | Verificare, adversarial | `llama3.1:8b` | caută erori; un model suspicios e acceptabil în rolul ăsta |
+
+Cele trei modele stau simultan în VRAM, 15,6 GB din 32. `qwen3:30b` nu e o opțiune: are 18,6 GB
+pe disc dar cere 33 GB încărcat, fiindcă arhitectura MoE se extinde la încărcare.
 
 **Cei doi verificatori rulează pe modele diferite, deliberat.** Două instanțe ale aceluiași
 model greșesc corelat, ceea ce face din „doi verificatori independenți" o formalitate.
@@ -84,28 +87,19 @@ aproape toate de la verificatorul de ancorare, care cerea potrivire literală ș
 reformulări corecte, cu motive de tipul *„nu se regăsește în extras, dar este o traducere a
 acesteia"*. Acolo a mers modelul puternic.
 
-Costul: verificarea de ancorare durează aproximativ 34 de secunde, față de câteva secunde pe
-modelul mic.
+Costul întregului lanț, măsurat prin API pe întrebări reale: **aproximativ 17 secunde** de la
+întrebare la răspuns verificat de două ori. Regăsire, generare și două verificări.
 
-> ### ⚠️ Cifrele de performanță din acest document sunt măsurate pe CPU
->
-> Mașina de inferență are o GTX 5090, dar Ollama de pe ea **nu o folosește**. Verificat în
-> timpul unei generări active: `size_vram` este `0.0 GB` pentru toate modelele încărcate, deși
-> suma cerută, 27,2 GB, încape în cei 32 ai plăcii.
->
-> ```bash
-> curl -s http://<gazda>:11434/api/ps | python3 -m json.tool | grep size_vram
-> ```
->
-> Toate duratele de mai jos — 34 de secunde per verificare, minute per document — descriu
-> inferență pe procesor. Pe GPU, aceleași modele sunt de ordinul zecilor de ori mai rapide.
->
-> **De verificat pe mașina de inferență:** drivere CUDA instalate, Ollama compilat cu suport
-> GPU, și dacă rulează într-un container care nu vede placa.
->
-> Merită știut și pentru diagnostic: am schimbat modelul de verificare de la 30B la 14B crezând
-> că rezolv o depășire de VRAM. Depășirea era de RAM de sistem. Diagnosticul era greșit, chiar
-> dacă reparația s-a nimerit utilă — pe CPU un model mai mic chiar e mai rapid.
+Inferența rulează pe GPU. Verificat în timpul unei generări active, `size_vram` egal cu
+dimensiunea totală a modelului:
+
+```bash
+curl -s http://<gazda>:11434/api/ps | python3 -m json.tool | grep size_vram
+```
+
+Debit măsurat: `llama3.1:8b` la 229 tokeni/s, `qwen3:14b` la 153. Comanda de mai sus e primul
+lucru de rulat când ceva pare inexplicabil de lent — o perioadă întreagă din dezvoltarea acestui
+proiect a fost petrecută pe inferență CPU fără ca nimic să dea eroare.
 
 ### Două capcane care arată exact ca defecțiuni
 
@@ -159,7 +153,33 @@ Documentele utilizatorului **nu părăsesc mașina**.
 
 ## Cifre măsurate
 
-Toate de mai jos vin din rulări reale, pe inferență **CPU**. Ce nu s-a măsurat e spus ca atare.
+Toate de mai jos vin din rulări reale, încheiate. Ce nu s-a măsurat e spus ca atare.
+
+### Cap la cap — suita completă, 105 cazuri, zero erori
+
+| Tip de caz | Cazuri | Corect | **Răspuns fals** | Refuz corect | Refuz greșit |
+|---|---:|---:|---:|---:|---:|
+| Conținut, întrebare naturală | 20 | 18 | **2** | — | 0 |
+| Lookup, trimitere la articol | 75 | 75 | **0** | — | 0 |
+| Trebuia refuzat | 10 | — | **0** | 10 | — |
+| **Total** | **105** | **93** | **2 = 1,9%** | **10/10** | **0** |
+
+Cifra care contează pentru un produs juridic este a treia coloană. Un refuz costă un client
+nemulțumit; un răspuns fals costă un client care ia o decizie greșită și dă vina pe tine.
+
+**Zero refuzuri false și 10 din 10 refuzuri corecte** — sistemul tace exact când trebuie și
+numai când trebuie.
+
+Ce sunt cele două răspunsuri false, examinate individual:
+
+- *„Pot să renunț la concediul de odihnă în schimbul unor bani?"* — a citat art. 146, care
+  prevede că **compensarea în bani e permisă doar la încetarea contractului**. Răspunsul e
+  corect juridic; setul aștepta art. 144, care spune același lucru mai direct. Etichetă strictă,
+  nu defect.
+- *„Ce se consideră timp de muncă?"* — a redat **definiția din art. 111 dar a atribuit-o
+  art. 113**. Ăsta e un defect real de regăsire, exact slăbiciunea documentată mai jos la
+  *Fără reranker*: articolul care **definește** un termen nu e lexical distinctiv față de cele
+  care îl folosesc.
 
 ### Regăsire — suita completă, 95 de cazuri, rulare încheiată
 
@@ -177,28 +197,26 @@ Progresia care a produs cifra de conținut, fiecare pas după un diagnostic:
 | RRF ponderat | 75,0% | 90,0% |
 | Plus potrivire pe prefix pentru flexiune | **85,0%** | **95,0%** |
 
-### Cap la cap — parțial
+### Cum se reproduce
 
-| Măsurătoare | Rezultat |
-|---|---|
-| Test de sanitate, 3 cu răspuns și 3 cu refuz | **6/6** |
-| Eșantion de 12 cazuri de conținut | **9/12** corecte, 1 răspuns greșit, 2 refuzuri false |
-
-### Ce NU s-a măsurat, și de ce
-
-**Suita completă cap la cap, pe toate cele 105 cazuri, nu a rulat până la capăt.** Cauza este
-inferența pe CPU: un caz care depinde de model durează între 90 de secunde și peste 20 de
-minute, iar rularea completă ar depăși 24 de ore. Trei încercări au fost oprite.
-
-Setul de evaluare **există și este validat**: 105 cazuri, fiecare cu articol-sursă verificat că
-există exact o dată în bază. Rulează cu:
+Setul de evaluare are 105 cazuri, fiecare cu articol-sursă verificat că există exact o dată în
+bază. Rulează cu:
 
 ```bash
-.venv/bin/python -m app.eval.end_to_end             # tot setul
-.venv/bin/python -m app.eval.end_to_end --doar-model # doar cele 30 care depind de model
+MODEL_VERIFICATOR=qwen3:14b MODEL_VERIFICATOR_2=llama3.1:8b \
+  .venv/bin/python -m app.eval.end_to_end             # tot setul
+.venv/bin/python -m app.eval.end_to_end --doar-model  # doar cele 30 care depind de model
 ```
 
-Prima măsurătoare de făcut după ce GPU-ul funcționează.
+### O capcană de măsurare, dacă schimbi modelele
+
+O rulare anterioară raporta **7 refuzuri false**. Cinci dintre ele erau răspunsuri corecte pe
+care detectorul de citări le respingea **fiindcă citau corect**: compara șiruri, iar textul unui
+articol nu-și repetă niciodată propriul număr — acela stă în etichetă. Deci „Conform articolului
+44" era declarat invenție chiar când sursa ERA articolul 44.
+
+Merită reținut ca metodă: când o gardă de siguranță respinge mult, verifică întâi garda, nu
+modelul.
 
 ## Ce nu face încă
 
@@ -207,22 +225,21 @@ Lista e completă și onestă. Citește-o înainte de a promite ceva unui client
 - **Acoperă trei coduri.** Codul civil, dreptul comercial, jurisprudența și normele metodologice
   nu sunt indexate. O întrebare din afara corpusului primește refuz, corect, dar clientul poate
   aștepta altceva.
-- **Cei doi verificatori rulează pe același model.** Două instanțe ale aceluiași model pot greși
-  identic, deci garanția e mai slabă decât sună „doi verificatori independenți". Interfața
-  primește modelul ca parametru, ca al doilea să poată fi mutat pe un model mai puternic.
 - **Fără autentificare, fără multi-tenant, fără audit trail.** MVP local, conform brief.
 - **Fără OCR.** PDF-urile scanate sunt respinse explicit, nu procesate gol.
 - **Fără urmărirea modificărilor legislative.** Corpusul e o fotografie la data ingestiei.
   Reingestia e manuală.
 - **Fără reranker.** Cazurile unde mai multe articole vorbesc despre același subiect, iar cel
-  care îl *definește* nu e distinctiv lexical, rămân o slăbiciune cunoscută.
-- **Analiza de document este sincronă și lentă.** Fiecare clauză costă un apel de generare plus
-  două de verificare, aproximativ 20 de secunde pe modelul local. Implicit se analizează 6
-  clauze, deci în jur de 2 minute per document. Pentru producție e nevoie de job asincron cu
-  identificator și interogare de stare, nu de un număr mai mic de clauze.
-- **Interfața nu a fost verificată vizual.** Build-ul trece și serverul întoarce HTTP 200 cu
-  conținutul așteptat, dar nimeni nu a văzut pagina randată. Aspectul, tema întunecată și
-  comportamentul pe ecran îngust sunt neverificate.
+  care îl *definește* nu e distinctiv lexical, rămân o slăbiciune cunoscută. Ăsta e exact unul
+  din cele două răspunsuri false din suită: definiția timpului de muncă e în art. 111, dar
+  regăsirea a pus art. 113 deasupra. Cel mai valoros lucru de adăugat în continuare.
+- **Analiza de document este sincronă.** Fiecare clauză costă un apel de generare plus două de
+  verificare, aproximativ 17 secunde. Implicit se analizează 6 clauze, deci în jur de două
+  minute per document — o cerere HTTP care ține conexiunea deschisă atâta timp. Pentru producție
+  e nevoie de job asincron cu identificator și interogare de stare, nu de mai puține clauze.
+- **Interfața nu a fost verificată vizual.** Build-ul trece, serverul întoarce HTTP 200 cu
+  conținutul așteptat și API-ul răspunde corect, dar nimeni nu a văzut pagina randată. Aspectul,
+  tema întunecată și comportamentul pe ecran îngust sunt neverificate.
 - **`docker compose` nu a fost rulat.** Docker nu era instalat pe mașina de dezvoltare.
   Fișierele sunt scrise, dar un build netestat ascunde de regulă cel puțin o eroare. Rularea
   locală, fără Docker, este calea verificată.
