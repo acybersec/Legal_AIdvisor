@@ -256,3 +256,160 @@ def test_referirea_la_un_articol_care_nu_a_fost_dat_ramane_inventie():
     s = sursa("44", "Delegarea poate fi dispusa pentru cel mult 60 de zile.",
               citare="Articolul 44 din CODUL MUNCII")
     assert detecteaza_citari_inventate("Conform articolului 999 [S1].", [s])
+
+
+# --- Reordonarea nu poate strica rezultatul de baza -------------------------
+#
+# Reordonarea e un pas optional peste un lant care deja functioneaza. Contractul
+# lui e negativ: la ORICE iesire pe care nu o intelegem, pastram ordinea primita.
+# Testele de mai jos exista fiindca un reranker care poate pierde un candidat e
+# mai periculos decat unul care nu ruleaza deloc.
+
+def _candidati(n: int) -> list:
+    from app.search.retrieve import Rezultat
+    return [Rezultat(articol_id=i, numar=str(i), act_slug="codul-muncii",
+                     citare=f"Articolul {i}", cale=f"cale {i}", text=f"text {i}",
+                     scor=1.0 / i, sursa="hibrid") for i in range(1, n + 1)]
+
+
+def _cu_raspuns_model(monkeypatch, ordine, exista=True):
+    """Inlocuieste apelul catre model cu un raspuns fix, ca sa testam garzile."""
+    from app.search import rerank
+    monkeypatch.setattr(rerank, "ACTIV", True)
+    monkeypatch.setattr(rerank, "_cere_ordine", lambda *a, **kw: ordine)
+    monkeypatch.setattr(rerank, "POARTA_ACTIVA", True)
+    monkeypatch.setattr(rerank, "_acoperit", lambda *a, **kw: exista)
+
+
+def test_rerank_aplica_ordinea_modelului(monkeypatch):
+    from app.search.rerank import rerankeaza
+    _cu_raspuns_model(monkeypatch, [3, 1, 2])
+    out = rerankeaza("q", _candidati(3), k=3)
+    assert [r.numar for r in out] == ["3", "1", "2"]
+
+
+def test_rerank_pastreaza_ordinea_cand_modelul_cade(monkeypatch):
+    """Model cazut, timeout, JSON invalid: toate ajung la None."""
+    from app.search.rerank import rerankeaza
+    _cu_raspuns_model(monkeypatch, None)
+    out = rerankeaza("q", _candidati(4), k=4)
+    assert [r.numar for r in out] == ["1", "2", "3", "4"]
+
+
+def test_rerank_ignora_indicii_inventati(monkeypatch):
+    """Un indice in afara intervalului nu trebuie sa scoata din lista un candidat real."""
+    from app.search.rerank import rerankeaza
+    _cu_raspuns_model(monkeypatch, [99, 2, -1, 0])
+    out = rerankeaza("q", _candidati(3), k=3)
+    assert [r.numar for r in out] == ["2", "1", "3"]
+
+
+def test_rerank_nu_pierde_candidati_nementionati(monkeypatch):
+    """Ce nu numeste modelul se pastreaza la coada. Prioritate schimbata, compozitie nu."""
+    from app.search.rerank import rerankeaza
+    out_ids = {r.numar for r in _candidati(6)}
+    _cu_raspuns_model(monkeypatch, [5])
+    out = rerankeaza("q", _candidati(6), k=6)
+    assert out[0].numar == "5"
+    assert {r.numar for r in out} == out_ids
+
+
+def test_rerank_nu_repeta_un_candidat(monkeypatch):
+    """Model care numeste acelasi indice de doua ori nu produce duplicate."""
+    from app.search.rerank import rerankeaza
+    _cu_raspuns_model(monkeypatch, [2, 2, 2, 1])
+    out = rerankeaza("q", _candidati(3), k=3)
+    assert [r.numar for r in out] == ["2", "1", "3"]
+
+
+def test_rerank_dezactivat_pastreaza_ordinea(monkeypatch):
+    """MODEL_RERANK gol opreste pasul, fara sa atinga rezultatul."""
+    from app.search import rerank
+    monkeypatch.setattr(rerank, "ACTIV", False)
+    out = rerank.rerankeaza("q", _candidati(5), k=3)
+    assert [r.numar for r in out] == ["1", "2", "3"]
+
+
+def test_poarta_inchisa_produce_lista_goala(monkeypatch):
+    """Cand niciun candidat nu raspunde, lista goala devine refuz mai jos in lant.
+
+    Fara asta, reordonarea ridica un articol la subiect dar fara raspuns pe
+    primul loc, iar generatorul raspunde increzator. Masurat: 3 din 10
+    intrebari care trebuiau refuzate primeau raspuns. Vezi antetul rerank.py.
+    """
+    from app.search.rerank import rerankeaza
+    _cu_raspuns_model(monkeypatch, [1, 2, 3], exista=False)
+    assert rerankeaza("q", _candidati(3), k=3) == []
+
+
+def test_poarta_cazuta_lasa_raspunsul_sa_treaca(monkeypatch):
+    """Poarta e o aparare in plus. Daca ea cade, lantul se comporta ca inainte."""
+    from app.search import rerank
+    monkeypatch.setattr(rerank, "ACTIV", True)
+    monkeypatch.setattr(rerank, "POARTA_ACTIVA", True)
+    monkeypatch.setattr(rerank, "_cere_ordine", lambda *a, **kw: [2, 1])
+    monkeypatch.setattr(rerank, "_acoperit", lambda *a, **kw: True)
+    out = rerank.rerankeaza("q", _candidati(2), k=2)
+    assert [r.numar for r in out] == ["2", "1"]
+
+
+# --- Garda determinista pentru valori la zi -------------------------------
+#
+# Corpusul e o fotografie. O intrebare care cere valoarea in vigoare ACUM nu
+# poate primi raspuns din el, si asta se stie din intrebare, fara model.
+# Testele apara ambele capete: sa prinda ce trebuie, si sa NU prinda intrebari
+# legitime despre aceleasi notiuni. Al doilea capat e cel fragil - doua cazuri
+# reale din setul de evaluare vorbesc despre salariul minim si despre plafonul
+# microintreprinderilor fara sa ceara valoarea de azi.
+
+import pytest
+
+from app.search.retrieve import cere_valoare_la_zi
+
+
+@pytest.mark.parametrize("intrebare", [
+    "Cat este salariul minim brut pe economie in 2026, in lei?",
+    "Care este plafonul de venituri pentru microintreprinderi in 2026, in euro?",
+    "Cat este cota de TVA redusa pentru alimente in acest moment?",
+    "Care este salariul mediu pe economie folosit la calculul CAS in 2026?",
+    "Ce cota de TVA se aplica in prezent?",
+    "Care e salariul minim in acest an?",
+    "Cat e impozitul actualmente?",
+])
+def test_prinde_intrebarile_despre_valoarea_de_azi(intrebare):
+    assert cere_valoare_la_zi(intrebare)
+
+
+@pytest.mark.parametrize("intrebare", [
+    # Ambele apar in setul de evaluare si TREBUIE sa primeasca raspuns.
+    "Cine stabileste salariul minim pe economie si cand se aplica?",
+    "Ce se intampla daca o microintreprindere depaseste plafonul de venituri?",
+    "Care este cota impozitului pe profit?",
+    "Ce este taxa pe valoarea adaugata?",
+    "Cat este preavizul la demisie?",
+    "Ce se considera timp de munca?",
+])
+def test_nu_prinde_intrebarile_legitime(intrebare):
+    assert not cere_valoare_la_zi(intrebare)
+
+
+def test_cauta_refuza_valorile_la_zi_fara_sa_atinga_modelul(monkeypatch, tmp_path):
+    """Garda ruleaza in `cauta`, INAINTE de orice apel de model sau de baza.
+
+    E important ca scurtcircuitul sa fie primul: intrebarea "cat e salariul
+    minim in 2026" nu are raspuns intr-un corpus fotografiat, indiferent ce
+    intoarce regasirea, deci nu merita nici un apel de model si nici o
+    interogare de baza.
+    """
+    from app.search import retrieve
+
+    class _Explodeaza:
+        def __getattr__(self, _):
+            raise AssertionError("nu trebuia atinsa nicio dependenta")
+
+    r = retrieve.Retriever.__new__(retrieve.Retriever)
+    r._db_path = str(tmp_path / "inexistent.db")
+    r._local = _Explodeaza()
+
+    assert r.cauta("Cat este salariul minim brut pe economie in 2026, in lei?") == []
+    assert r.cauta("Cat este cota de TVA redusa in acest moment?") == []

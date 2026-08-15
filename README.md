@@ -73,6 +73,7 @@ cd frontend && npm install && npm run build && npx next start
 |---|---|---|
 | Embeddings | `bge-m3`, 1024 dim | multilingv; modelele antrenate pe engleză sunt slabe pe română juridică |
 | Generare | `llama3.1:8b` | fluența costă puțin; două propoziții corecte în română nu cer un model mare |
+| Reordonare | `qwen3:14b` | e judecată, nu fluență: „răspunde la întrebare" vs „vorbește despre subiect" |
 | Verificare, ancorare | `qwen3:14b` | aici se decide dacă un răspuns pleacă la client |
 | Verificare, adversarial | `llama3.1:8b` | caută erori; un model suspicios e acceptabil în rolul ăsta |
 
@@ -128,6 +129,7 @@ Se schimbă din mediu, fără atingerea codului:
 
 ```bash
 OLLAMA_URL=http://10.0.1.123:11434
+MODEL_RERANK=qwen3:14b             # reordonare; gol = strat oprit
 MODEL_VERIFICATOR=qwen3:14b        # ancorare
 MODEL_VERIFICATOR_2=llama3.1:8b    # adversarial
 ```
@@ -136,7 +138,7 @@ Documentele utilizatorului **nu părăsesc mașina**.
 
 ## Cum se evită răspunsurile false
 
-Șapte straturi, în ordinea în care intervin:
+Opt straturi, în ordinea în care intervin:
 
 1. **Fragmentare pe structura legii.** Un articol complet per unitate, cu lanțul de părinți
    atașat. Nu ferestre de dimensiune fixă.
@@ -147,9 +149,32 @@ Documentele utilizatorului **nu părăsesc mașina**.
    din care face parte.
 5. **Rută deterministă** pentru trimiteri explicite. „articolul 145 din Codul muncii" se
    rezolvă direct din bază, nu semantic.
-6. **Citări atașate programatic.** Modelul scrie `[S1]`, sistemul substituie citarea stocată.
+6. **Reordonare cu model.** Primii opt candidați se dau unui model care îi pune în ordinea în
+   care *răspund* la întrebare, nu în care seamănă cu ea. Vezi mai jos de ce contează.
+7. **Citări atașate programatic.** Modelul scrie `[S1]`, sistemul substituie citarea stocată.
    O trimitere juridică scrisă de model și absentă din surse oprește răspunsul.
-7. **Doi verificatori independenți** plus refuz explicit.
+8. **Doi verificatori independenți** plus refuz explicit.
+
+### De ce stratul 6 există
+
+Întrebarea *„Ce se consideră timp de muncă?"* scotea art. 111 pe **locul opt din opt**.
+Art. 111 spune, textual, *„Timpul de muncă reprezintă orice perioadă în care salariatul
+prestează munca"*. Deasupra lui stăteau art. 113, despre repartizarea timpului de muncă, și
+art. 130, despre norma de muncă.
+
+Cauza nu e un bug, e felul în care funcționează BM25: scorul crește cu frecvența termenului.
+Un articol care **folosește** repetat „timpul de muncă" bate articolul care îl **definește** o
+singură dată. Pentru un corpus juridic asta e sistematic — articolele de definiții sunt scurte
+și enunță termenul o dată.
+
+Nici regăsirea vectorială nu repară asta singură: art. 111 și 113 sunt semantic apropiate,
+vorbesc despre același subiect. Diferența dintre *„vorbește despre X"* și *„răspunde la
+întrebarea despre X"* cere citirea ambelor texte în raport cu întrebarea.
+
+**Contractul stratului: nu poate face rezultatul mai prost.** Orice ieșire pe care sistemul nu
+o înțelege — JSON invalid, indici inventați, model căzut, timeout — înseamnă păstrarea ordinii
+primite, iar un candidat pe care modelul nu îl menționează se adaugă la coadă, nu se pierde.
+Șase teste acoperă exact aceste căi. Se oprește complet cu `MODEL_RERANK=`.
 
 ## Cifre măsurate
 
@@ -229,10 +254,6 @@ Lista e completă și onestă. Citește-o înainte de a promite ceva unui client
 - **Fără OCR.** PDF-urile scanate sunt respinse explicit, nu procesate gol.
 - **Fără urmărirea modificărilor legislative.** Corpusul e o fotografie la data ingestiei.
   Reingestia e manuală.
-- **Fără reranker.** Cazurile unde mai multe articole vorbesc despre același subiect, iar cel
-  care îl *definește* nu e distinctiv lexical, rămân o slăbiciune cunoscută. Ăsta e exact unul
-  din cele două răspunsuri false din suită: definiția timpului de muncă e în art. 111, dar
-  regăsirea a pus art. 113 deasupra. Cel mai valoros lucru de adăugat în continuare.
 - **Analiza de document este sincronă.** Fiecare clauză costă un apel de generare plus două de
   verificare, aproximativ 17 secunde. Implicit se analizează 6 clauze, deci în jur de două
   minute per document — o cerere HTTP care ține conexiunea deschisă atâta timp. Pentru producție

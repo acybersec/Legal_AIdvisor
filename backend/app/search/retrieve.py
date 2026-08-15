@@ -16,6 +16,7 @@ scurtatura de scor: metricile se raporteaza separat pe tip.
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import threading
@@ -80,6 +81,62 @@ _STOP = {
 
 # Cate caractere pastram din fiecare cuvant inainte de wildcard.
 _PREFIX_LEN = 6
+
+# Cati candidati vede reordonarea. Opt, nu mai multi, si nu mai putini.
+#
+# Mai putini: articolul corect statea pe locul OPT in cazul care a motivat tot
+# pasul asta, deci o fereastra de cinci l-ar fi ratat.
+# Mai multi: promptul creste liniar, iar castigul nu - ce nu intra in primele
+# opt dupa RRF e aproape intotdeauna dintr-un cu totul alt subiect.
+_POOL_RERANK = 8
+
+# Reordonarea e OPRITA implicit, si asta e o concluzie masurata, nu o omisiune.
+#
+# Cifrele complete, pe aceleasi 105 cazuri:
+#
+#   varianta                 raspunsuri false   refuzuri false   corecte
+#   fara reordonare                    2               0            93
+#   doar reordonare                    4               2            92
+#   reordonare + poarta                1               3            90
+#
+# Reordonarea + poarta chiar injumatatesc raspunsurile false, de la 2 la 1. Dar
+# refuza gresit 3 intrebari valide din 20, adica 15% dintre intrebarile reale
+# ale unui client primesc "nu pot raspunde" cand raspunsul exista. Pentru un
+# produs vandut pe abonament asta costa mai mult decat castiga.
+#
+# Codul ramane, complet si testat, fiindca pe un corpus mai mare sau cu un model
+# de reordonare mai bun raportul se poate inversa. Se aprinde cu RERANK=1 si se
+# remasoara cu app.eval.end_to_end.
+RERANK_IMPLICIT = os.environ.get("RERANK", "0").strip() not in ("", "0")
+
+
+# Intrebari despre valoarea IN VIGOARE ACUM. Deterministe, fara model.
+#
+# Corpusul e o fotografie facuta la data ingestiei. La "cat e salariul minim in
+# 2026" raspunsul corect nu e un articol, e "nu pot sti asta din textul legii",
+# si asta se stie din INTREBARE, nu din candidati. Un model nu adauga nimic
+# aici, si masurat chiar strica: cu extrase mai lungi, gasea art. 291 care chiar
+# vorbeste despre cote reduse de TVA si declara intrebarea acoperita, ignorand
+# ca se ceruse valoarea de azi.
+#
+# Regula, nu model, din acelasi motiv pentru care citarile se leaga in cod:
+# ce poate fi impus determinist nu se lasa pe seama bunavointei unui model.
+#
+# Atentie la ce NU trebuie sa prinda. Doua intrebari legitime din setul de
+# evaluare vorbesc despre exact aceleasi notiuni fara sa ceara valoarea de azi:
+#   "Cine stabileste salariul minim pe economie si cand se aplica?"
+#   "Ce se intampla daca o microintreprindere depaseste plafonul de venituri?"
+# De aceea tiparul cere un marcaj temporal explicit, nu cuvinte de subiect.
+_VALOARE_LA_ZI = re.compile(
+    r"\b(?:in\s+(?:acest\s+(?:an|moment)|momentul\s+de\s+fata|prezent|vigoare\s+acum)"
+    r"|anul\s+acesta|in\s+20\d\d|actualmente|la\s+ora\s+actuala|in\s+ziua\s+de\s+azi)\b",
+    re.IGNORECASE,
+)
+
+
+def cere_valoare_la_zi(intrebare: str) -> bool:
+    """Intrebarea cere o valoare in vigoare acum, pe care un corpus fix nu o poate da."""
+    return bool(_VALOARE_LA_ZI.search(intrebare))
 
 
 def _stem_prefix(cuvant: str) -> str:
@@ -181,11 +238,21 @@ class Retriever:
 
     # -- fuziune -----------------------------------------------------------
 
-    def cauta(self, intrebare: str, *, k: int = 5, pool: int = 40) -> list[Rezultat]:
+    def cauta(self, intrebare: str, *, k: int = 5, pool: int = 40,
+              rerank: bool = RERANK_IMPLICIT) -> list[Rezultat]:
+        # Intrebarile despre valoarea in vigoare ACUM nu au raspuns intr-un
+        # corpus care e o fotografie, si asta se stie din intrebare. Lista goala
+        # inseamna mai jos in lant refuz explicit. Vezi rerank.cere_valoare_la_zi.
+        if cere_valoare_la_zi(intrebare):
+            return []
+
         explicit = detecteaza_articol(intrebare)
         if explicit:
             ids = self._explicit(*explicit)
             if ids:
+                # Ruta determinista nu se reordoneaza. Intrebarea numeste
+                # articolul, deci nu exista nimic de judecat, iar un apel de
+                # model aici ar adauga secunde si risc fara castig.
                 return self._materializeaza(ids[:k], {i: 1.0 for i in ids}, "explicit")
 
         liste = [
@@ -197,8 +264,18 @@ class Retriever:
             for rang, aid in enumerate(lista):
                 scoruri[aid] = scoruri.get(aid, 0.0) + greutate / (RRF_K + rang + 1)
 
-        ordonate = sorted(scoruri, key=lambda i: -scoruri[i])[:k]
-        return self._materializeaza(ordonate, scoruri, "hibrid")
+        # Cand urmeaza reordonarea, materializam mai multi candidati decat cere
+        # apelantul. Altfel reordonarea ar putea doar sa amestece primii k, iar
+        # articolul corect - care sta uneori pe locul opt, vezi rerank.py - nu
+        # ar ajunge niciodata sub ochii modelului.
+        cati = _POOL_RERANK if rerank else k
+        ordonate = sorted(scoruri, key=lambda i: -scoruri[i])[:cati]
+        rezultate = self._materializeaza(ordonate, scoruri, "hibrid")
+
+        if not rerank:
+            return rezultate[:k]
+        from .rerank import rerankeaza  # import local: lantul de baza nu depinde de model
+        return rerankeaza(intrebare, rezultate, k=k)
 
     def _materializeaza(self, ids: list[int], scoruri: dict[int, float],
                         sursa: str) -> list[Rezultat]:
