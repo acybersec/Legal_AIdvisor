@@ -431,3 +431,62 @@ def test_generarea_e_determinista_implicit():
 
     assert TEMPERATURA == 0.0
     assert inspect.signature(genereaza).parameters["temperatura"].default == 0.0
+
+
+# --- Intrebari de definitie -------------------------------------------------
+#
+# Articolul care DEFINESTE un termen pierde in fata celor care il folosesc,
+# fiindca BM25 premiaza frecventa iar o definitie enunta termenul o data.
+# Masurat: art. 111 statea pe locul 8 din 8 la "Ce se considera timp de munca",
+# desi spune textual "Timpul de munca reprezinta orice perioada in care...".
+
+from app.search.retrieve import _defineste, detecteaza_definitie
+
+
+@pytest.mark.parametrize("intrebare,termen", [
+    ("Ce se considera timp de munca?", "timp de munca"),
+    ("Ce este contractul colectiv de munca?", "contractul colectiv de munca"),
+    ("Ce inseamna delegare?", "delegare"),
+    ("Ce reprezinta concedierea?", "concedierea"),
+    ("Ce înseamnă muncă subdeclarată?", "muncă subdeclarată"),
+])
+def test_recunoaste_intrebarile_de_definitie(intrebare, termen):
+    assert detecteaza_definitie(intrebare) == termen
+
+
+@pytest.mark.parametrize("intrebare", [
+    # "Ce se intampla" incepe la fel dar NU cere o definitie. Daca ar fi prins,
+    # am urca articole de definitii peste raspunsul corect.
+    "Ce se intampla daca am fost concediat nelegal?",
+    "Ce se intampla daca o microintreprindere depaseste plafonul de venituri?",
+    "Cat este preavizul la demisie?",
+    "Care este cota impozitului pe profit?",
+    "Cate zile de concediu de odihna am minim pe an?",
+])
+def test_nu_confunda_alte_intrebari_cu_definitii(intrebare):
+    assert detecteaza_definitie(intrebare) is None
+
+
+def test_recunoaste_definitia_in_forma_flexionara():
+    """Intrebarea spune 'timp de munca', legea scrie 'Timpul de munca'."""
+    text = "(1) Timpul de muncă reprezintă orice perioadă în care salariatul prestează munca."
+    assert _defineste(text, "timp de munca")
+
+
+def test_nu_boosteaza_un_articol_care_doar_foloseste_termenul():
+    """Fara verb de definitie nu e definitie, oricat de des apare termenul."""
+    text = ("(1) Repartizarea timpului de muncă în cadrul săptămânii este, de regulă, "
+            "uniformă, de 8 ore pe zi timp de 5 zile.")
+    assert not _defineste(text, "timp de munca")
+
+
+def test_nu_boosteaza_definitia_altui_termen():
+    """Un verb de definitie plus alt subiect nu trebuie sa urce."""
+    text = "(1) Concedierea reprezintă încetarea contractului individual de muncă."
+    assert not _defineste(text, "timp de munca")
+
+
+def test_definitia_se_cauta_doar_la_inceputul_articolului():
+    """Un 'reprezinta' de la mijlocul unui articol lung nu e definitia lui."""
+    text = "x" * 300 + " timpul de muncă reprezintă altceva"
+    assert not _defineste(text, "timp de munca")

@@ -177,6 +177,70 @@ def detecteaza_articol(intrebare: str) -> tuple[str, str | None] | None:
     return m.group(1), slug
 
 
+# --- Intrebari de definitie -------------------------------------------------
+#
+# PROBLEMA, masurata: "Ce se considera timp de munca?" scotea art. 111 pe locul
+# opt din opt, desi art. 111 spune textual "Timpul de munca reprezinta orice
+# perioada in care salariatul presteaza munca". Deasupra stateau articole care
+# FOLOSESC termenul de mai multe ori.
+#
+# Cauza e felul in care functioneaza BM25: scorul creste cu frecventa. Un
+# articol care foloseste repetat un termen bate articolul care il DEFINESTE o
+# singura data. Pentru un corpus juridic e sistematic, fiindca definitiile sunt
+# scurte si enunta termenul o data.
+#
+# De ce NU un reranker cu model: a fost construit si masurat. Reordoneaza bine,
+# dar produce INTOTDEAUNA un "cel mai bun", deci raspunde si la intrebari la
+# care sistemul ar fi trebuit sa taca. Vezi rerank.py.
+#
+# Semnalul folosit aici e ingust si verificabil: doar 64 din cele 1372 de
+# articole deschid cu o constructie de definitie. Nu e o euristica vaga peste
+# tot corpusul, e o potrivire pe o forma juridica standard.
+_INTREBARE_DEFINITIE = re.compile(
+    r"^\s*(?:ce\s+(?:se\s+(?:considera|intelege|în\s*țelege|înțelege)|este|inseamna"
+    r"|înseamnă|reprezinta|reprezintă)|definiti[ae]\s+(?:lui\s+)?)\s+(?P<termen>.+?)\s*[?.]?\s*$",
+    re.IGNORECASE,
+)
+
+# Verbele cu care legea romaneasca introduce o definitie.
+_VERB_DEFINITIE = re.compile(
+    r"(?:reprezint[ăa]|se\s+[îi]n[țt]elege|constituie|este\s+definit)", re.IGNORECASE
+)
+
+# Cat din inceputul articolului privim. O definitie sta in alineatul (1), nu la
+# mijloc; cautand mai departe am prinde trimiteri intamplatoare.
+_FEREASTRA_DEFINITIE = 200
+
+# Bonusul adaugat scorului RRF. Ordinul de marime conteaza: scorurile RRF sunt
+# in jur de 1/(60+rang), deci intre 0,016 si 0,014 pe primele pozitii. Un bonus
+# de 0,02 muta un articol de definitie peste tot restul, dar NU inventeaza
+# rezultate: se aplica doar candidatilor deja regasiti.
+_BONUS_DEFINITIE = 0.02
+
+
+def detecteaza_definitie(intrebare: str) -> str | None:
+    """Termenul cerut, daca intrebarea cere o definitie. Altfel None."""
+    m = _INTREBARE_DEFINITIE.match(intrebare.strip())
+    return m.group("termen").strip() if m else None
+
+
+def _defineste(text: str, termen: str) -> bool:
+    """Deschide articolul cu definitia termenului cerut?
+
+    Potrivirea pe cuvinte se face pe PREFIX, din acelasi motiv pentru care o
+    face si cautarea lexicala: romana e flexionara, iar intrebarea spune "timp
+    de munca" acolo unde legea scrie "Timpul de munca".
+    """
+    inceput = text[:_FEREASTRA_DEFINITIE]
+    if not _VERB_DEFINITIE.search(inceput):
+        return False
+    cuvinte = [c for c in re.findall(r"\w{3,}", termen.lower(), re.UNICODE) if c not in _STOP]
+    if not cuvinte:
+        return False
+    jos = inceput.lower()
+    return all(c[:_PREFIX_LEN] in jos for c in cuvinte)
+
+
 class Retriever:
     """Regasire hibrida.
 
@@ -269,6 +333,14 @@ class Retriever:
         # articolul corect - care sta uneori pe locul opt, vezi rerank.py - nu
         # ar ajunge niciodata sub ochii modelului.
         cati = _POOL_RERANK if rerank else k
+        # Intrebare de definitie: articolul care DEFINESTE termenul urca peste
+        # cele care doar il folosesc. Determinist, fara apel de model.
+        termen = detecteaza_definitie(intrebare)
+        if termen and scoruri:
+            for aid, text_art in self._texte(list(scoruri)).items():
+                if _defineste(text_art, termen):
+                    scoruri[aid] += _BONUS_DEFINITIE
+
         ordonate = sorted(scoruri, key=lambda i: -scoruri[i])[:cati]
         rezultate = self._materializeaza(ordonate, scoruri, "hibrid")
 
@@ -276,6 +348,18 @@ class Retriever:
             return rezultate[:k]
         from .rerank import rerankeaza  # import local: lantul de baza nu depinde de model
         return rerankeaza(intrebare, rezultate, k=k)
+
+    def _texte(self, ids: list[int]) -> dict[int, str]:
+        """Doar inceputul textului, pentru verificarea de definitie."""
+        if not ids:
+            return {}
+        marcaje = ",".join("?" * len(ids))
+        rows = self.conn.execute(
+            f"SELECT id, substr(text, 1, {_FEREASTRA_DEFINITIE}) AS t "
+            f"FROM articole WHERE id IN ({marcaje})",
+            ids,
+        ).fetchall()
+        return {r["id"]: r["t"] for r in rows}
 
     def _materializeaza(self, ids: list[int], scoruri: dict[int, float],
                         sursa: str) -> list[Rezultat]:

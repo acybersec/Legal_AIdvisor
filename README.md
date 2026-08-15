@@ -166,8 +166,8 @@ Opt straturi, în ordinea în care intervin:
    din care face parte.
 5. **Rută deterministă** pentru trimiteri explicite. „articolul 145 din Codul muncii" se
    rezolvă direct din bază, nu semantic.
-6. **Reordonare cu model.** Primii opt candidați se dau unui model care îi pune în ordinea în
-   care *răspund* la întrebare, nu în care seamănă cu ea. Vezi mai jos de ce contează.
+6. **Recunoașterea întrebărilor de definiție.** Articolul care *definește* un termen urcă peste
+   cele care doar îl folosesc. Determinist, fără apel de model. Vezi mai jos de ce.
 7. **Citări atașate programatic.** Modelul scrie `[S1]`, sistemul substituie citarea stocată.
    O trimitere juridică scrisă de model și absentă din surse oprește răspunsul.
 8. **Doi verificatori independenți** plus refuz explicit.
@@ -188,10 +188,27 @@ Nici regăsirea vectorială nu repară asta singură: art. 111 și 113 sunt sema
 vorbesc despre același subiect. Diferența dintre *„vorbește despre X"* și *„răspunde la
 întrebarea despre X"* cere citirea ambelor texte în raport cu întrebarea.
 
-**Contractul stratului: nu poate face rezultatul mai prost.** Orice ieșire pe care sistemul nu
-o înțelege — JSON invalid, indici inventați, model căzut, timeout — înseamnă păstrarea ordinii
-primite, iar un candidat pe care modelul nu îl menționează se adaugă la coadă, nu se pierde.
-Șase teste acoperă exact aceste căi. Se oprește complet cu `MODEL_RERANK=`.
+**Soluția aplicată e deterministă, nu un reranker.** Când întrebarea cere o definiție
+(*„ce se consideră"*, *„ce este"*, *„ce înseamnă"*), articolele care deschid cu o construcție de
+definiție — *„X reprezintă"*, *„prin X se înțelege"* — și al căror subiect e chiar termenul cerut
+primesc un bonus de scor. Potrivirea e pe prefix, fiindcă întrebarea spune „timp de muncă" acolo
+unde legea scrie „Timpul de muncă".
+
+Semnalul e îngust și verificabil: **doar 64 din cele 1372 de articole** deschid cu o astfel de
+construcție. Nu e o euristică vagă peste tot corpusul, e o potrivire pe o formă juridică standard.
+
+| | recall@1 | recall@3 | recall@5 |
+|---|---:|---:|---:|
+| Fără | 85,0% | 90,0% | 95,0% |
+| Cu recunoașterea definițiilor | **90,0%** | **95,0%** | **100%** |
+
+Art. 111 a urcat de pe locul 8 pe locul 1. Zero regresii pe cele 75 de cazuri cu trimitere
+explicită.
+
+**Un reranker cu model a fost construit, măsurat și oprit.** Reordonează bine, dar produce
+*întotdeauna* un „cel mai bun", chiar când niciun candidat nu e bun, deci începe să răspundă la
+întrebări la care sistemul ar fi trebuit să tacă. Codul rămâne întreg și testat în
+`backend/app/search/rerank.py`, cu argumentul complet scris acolo. Se aprinde cu `RERANK=1`.
 
 ## Cifre măsurate
 
@@ -240,9 +257,9 @@ Ce sunt cele două răspunsuri false, examinate individual:
 
 | Tip de caz | Cazuri | recall@1 | recall@3 | recall@5 |
 |---|---:|---:|---:|---:|
-| Conținut, întrebare în limbaj natural | 20 | **85,0%** | 90,0% | 95,0% |
+| Conținut, întrebare în limbaj natural | 20 | **90,0%** | 95,0% | 100% |
 | Lookup, trimitere explicită la articol | 75 | **100%** | 100% | 100% |
-| Total | 95 | 96,8% | 97,9% | 98,9% |
+| Total | 95 | **97,9%** | 98,9% | 100% |
 
 Progresia care a produs cifra de conținut, fiecare pas după un diagnostic:
 
@@ -250,7 +267,8 @@ Progresia care a produs cifra de conținut, fiecare pas după un diagnostic:
 |---|---:|---:|
 | RRF cu ponderi egale | 65,0% | 85,0% |
 | RRF ponderat | 75,0% | 90,0% |
-| Plus potrivire pe prefix pentru flexiune | **85,0%** | **95,0%** |
+| Plus potrivire pe prefix pentru flexiune | 85,0% | 95,0% |
+| Plus recunoașterea întrebărilor de definiție | **90,0%** | **100%** |
 
 ### Cum se reproduce
 
