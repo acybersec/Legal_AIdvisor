@@ -218,10 +218,10 @@ Toate de mai jos vin din rulări reale, încheiate. Ce nu s-a măsurat e spus ca
 
 | Tip de caz | Cazuri | Corect | **Răspuns fals** | Refuz corect | Refuz greșit |
 |---|---:|---:|---:|---:|---:|
-| Conținut, întrebare naturală | 20 | 17 | **2** | — | 1 |
+| Conținut, întrebare naturală | 20 | 18 | **1** | — | 1 |
 | Lookup, trimitere la articol | 75 | 75 | **0** | — | 0 |
 | Trebuia refuzat | 10 | — | **0** | 10 | — |
-| **Total** | **105** | **92** | **2 = 1,9%** | **10/10** | **1** |
+| **Total** | **105** | **93** | **1 = 1,0%** | **10/10** | **1** |
 
 Cifra care contează pentru un produs juridic este a treia coloană. Un refuz costă un client
 nemulțumit; un răspuns fals costă un client care ia o decizie greșită și dă vina pe tine.
@@ -242,16 +242,20 @@ Cu alte cuvinte: fără determinism, jumătate din concluziile pe care le tragi 
 rulare sunt zgomot. Iar pentru client, câștigul e și mai direct — *„ieri mi-a spus altceva"* e o
 conversație care n-are ce căuta într-un produs juridic.
 
-Ce sunt cele două răspunsuri false, examinate individual:
+Ce sunt cele două cazuri rămase, examinate individual:
 
-- *„Pot să renunț la concediul de odihnă în schimbul unor bani?"* — a citat art. 146, care
-  prevede că **compensarea în bani e permisă doar la încetarea contractului**. Răspunsul e
-  corect juridic; setul aștepta art. 144, care spune același lucru mai direct. Etichetă strictă,
-  nu defect.
-- *„Ce se consideră timp de muncă?"* — a redat **definiția din art. 111 dar a atribuit-o
-  art. 113**. Defect real de regăsire: articolul care **definește** un termen nu e lexical
-  distinctiv față de cele care îl folosesc. BM25 premiază frecvența, iar o definiție enunță
-  termenul o singură dată. Vezi *De ce stratul 6 există* mai sus.
+- **Singurul răspuns fals**, *„Pot să renunț la concediul de odihnă în schimbul unor bani?"* — a
+  citat art. 146, care prevede că **compensarea în bani e permisă doar la încetarea
+  contractului**. Răspunsul e corect juridic; setul aștepta art. 144, care spune același lucru
+  mai direct. Etichetă strictă, nu defect de produs. Rămâne numărat ca fals, fiindcă a corecta
+  eticheta pentru a îmbunătăți propria cifră e exact felul în care se pierde încrederea într-o
+  măsurătoare.
+- **Refuzul fals**, *„Câte perioade de probă poate avea un contract de muncă?"* — verificatorul
+  de ancorare a respins un răspuns corect. Ăsta e defectul real rămas, și e în verificare, nu în
+  regăsire.
+
+Defectul de regăsire pe definiții, care producea al doilea răspuns fals în măsurătorile
+anterioare, a fost reparat determinist. Vezi *De ce stratul 6 există*.
 
 ### Regăsire — suita completă, 95 de cazuri, rulare încheiată
 
