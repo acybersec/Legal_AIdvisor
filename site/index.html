@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Asistent juridic ancorat in legislatia romaneasca. Fiecare afirmatie citeaza articolul din care provine, iar citarea nu vine de la model.">
+<title>Legal_AIdvisor</title>
+<style>
+/* Paleta: hartia rece a formularelor oficiale romanesti, nu crem cald.
+   Verdele e cel din aplicatie, ca site-ul si produsul sa fie acelasi lucru.
+   Oxidul apare EXCLUSIV pe starea de refuz - e singura culoare cu un sens. */
+:root{
+  --hartie:#edeeea; --card:#fbfbf9; --ink:#14171a; --ink-2:#565c58;
+  --linie:#c9ccc4; --verde:#1f4d3d; --verde-slab:#e4ebe7;
+  --oxid:#8a3324; --oxid-slab:#f6ebe8;
+  --serif:ui-serif,Georgia,"Times New Roman",serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,"Courier New",monospace;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --hartie:#101312; --card:#181c1a; --ink:#eceee9; --ink-2:#9aa199;
+    --linie:#2c322e; --verde:#7fbfa4; --verde-slab:#17241f;
+    --oxid:#d98a72; --oxid-slab:#241816;
+  }
+}
+:root[data-theme="dark"]{
+  --hartie:#101312; --card:#181c1a; --ink:#eceee9; --ink-2:#9aa199;
+  --linie:#2c322e; --verde:#7fbfa4; --verde-slab:#17241f;
+  --oxid:#d98a72; --oxid-slab:#241816;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--hartie);color:var(--ink);
+  font:17px/1.6 var(--serif);-webkit-font-smoothing:antialiased}
+.wrap{max-width:940px;margin:0 auto;padding:0 24px}
+
+/* Eticheta: singurul element repetat. Marcheaza ce e DATA, nu proza. */
+.et{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-2)}
+
+header{padding:72px 0 0}
+h1{font-size:clamp(38px,7vw,68px);line-height:1.02;letter-spacing:-.028em;
+  font-weight:600;margin:22px 0 0;max-width:15ch}
+h1 em{font-style:normal;color:var(--verde)}
+.sub{font-size:19px;color:var(--ink-2);max-width:48ch;margin:22px 0 0}
+
+/* Cartea de raspuns: elementul de semnatura. Legatura vizibila dintre
+   afirmatie si articolul din care provine. */
+.carte{background:var(--card);border:1px solid var(--linie);border-radius:3px;
+  margin-top:44px;overflow:hidden}
+.carte + .carte{margin-top:20px}
+.rand{padding:20px 24px;border-bottom:1px solid var(--linie)}
+.rand:last-child{border-bottom:0}
+.intrebare{font-size:19px;margin:8px 0 0}
+.raspuns{font-size:18px;margin:10px 0 0}
+
+/* Citarea legata. Monospace peste tot, fiindca e data, nu proza. */
+.cit{font:500 14px/1 var(--mono);color:var(--verde);background:var(--verde-slab);
+  padding:3px 7px;border-radius:2px;white-space:nowrap;
+  transition:background .5s ease,color .5s ease}
+.cit.marcaj{color:var(--ink-2);background:transparent;
+  border:1px dashed var(--linie);padding:2px 6px}
+
+.temei{margin:14px 0 0;padding:14px 16px;border-left:2px solid var(--verde);
+  background:var(--verde-slab);border-radius:0 2px 2px 0}
+.temei p{margin:8px 0 0;font-size:15px;color:var(--ink-2);line-height:1.55}
+.cale{font:500 12px/1.5 var(--mono);color:var(--ink-2)}
+
+.verdicte{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.pastila{font:500 12px/1 var(--mono);padding:6px 10px;border-radius:2px;
+  background:var(--verde-slab);color:var(--verde)}
+.refuz .pastila{background:var(--oxid-slab);color:var(--oxid)}
+.refuz{border-color:var(--oxid)}
+.refuz .et{color:var(--oxid)}
+.motiv{font-size:17px;margin:10px 0 0;color:var(--oxid)}
+
+section{padding:88px 0 0}
+h2{font-size:clamp(25px,3.6vw,34px);letter-spacing:-.02em;font-weight:600;
+  margin:14px 0 0;max-width:22ch}
+.intro{color:var(--ink-2);max-width:56ch;margin:16px 0 0}
+
+/* Cifre: tabel, nu carduri. Sunt masuratori, se citesc comparativ. */
+table{width:100%;border-collapse:collapse;margin-top:30px;font-size:16px}
+th,td{text-align:left;padding:13px 12px;border-bottom:1px solid var(--linie)}
+th{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-2)}
+td.n{font:500 16px/1 var(--mono);text-align:right;white-space:nowrap}
+td.n b{color:var(--verde);font-weight:600}
+caption{caption-side:bottom;margin-top:14px;font-size:14px;color:var(--ink-2);
+  text-align:left;line-height:1.55}
+
+.straturi{list-style:none;padding:0;margin:30px 0 0;counter-reset:s}
+.straturi li{counter-increment:s;padding:16px 0 16px 46px;position:relative;
+  border-top:1px solid var(--linie);font-size:16px}
+.straturi li::before{content:counter(s,decimal-leading-zero);position:absolute;
+  left:0;top:17px;font:600 12px/1 var(--mono);color:var(--verde)}
+.straturi b{font-weight:600}
+.straturi span{color:var(--ink-2)}
+
+.lipsa{margin:30px 0 0;padding:0;list-style:none}
+.lipsa li{padding:12px 0;border-top:1px solid var(--linie);font-size:16px;
+  color:var(--ink-2)}
+.lipsa b{color:var(--ink);font-weight:600}
+
+.final{margin:88px 0 0;padding:40px 0 96px;border-top:2px solid var(--ink)}
+.final p{max-width:52ch;color:var(--ink-2);margin:16px 0 0}
+.gol{display:inline-block;margin-top:6px;padding:2px 8px;border:1px dashed var(--linie);
+  font:500 13px/1.7 var(--mono);color:var(--ink-2)}
+footer{padding:0 0 72px;font-size:14px;color:var(--ink-2)}
+footer p{margin:6px 0 0;max-width:60ch}
+
+@media (max-width:640px){
+  body{font-size:16px}
+  header{padding-top:48px}
+  section{padding-top:64px}
+  .rand{padding:16px 17px}
+  table{font-size:15px}
+  th,td{padding:11px 8px}
+}
+@media (prefers-reduced-motion:reduce){
+  .cit{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <p class="et">Asistent juridic &middot; dreptul muncii &middot; fiscal</p>
+  <h1>Fiecare afirmație poartă <em>articolul din care provine</em>.</h1>
+  <p class="sub">Nu pentru că modelul îl scrie. Pentru că nu are voie să îl scrie.
+  Citarea e compusă la ingestie și legată programatic de textul legii.</p>
+
+  <div class="carte">
+    <div class="rand">
+      <p class="et">Întrebare</p>
+      <p class="intrebare">Cât este preavizul la demisie?</p>
+    </div>
+    <div class="rand">
+      <p class="et">Răspuns verificat</p>
+      <p class="raspuns">Termenul de preaviz este cel convenit de părți și nu poate fi
+        mai mare de 20 de zile lucrătoare pentru salariații cu funcții de execuție.
+        <span class="cit marcaj" id="marcaj">[S1]</span></p>
+      <div class="temei">
+        <p class="cale">Titlul II &rsaquo; Capitolul V &rsaquo; Secțiunea a 8-a Demisia &rsaquo; Articolul 81</p>
+        <p>„(4) Termenul de preaviz este cel convenit de părți în contractul individual
+          de muncă sau, după caz, cel prevăzut în contractele colective de muncă
+          aplicabile și nu poate fi mai mare de 20 de zile lucrătoare pentru salariații
+          cu funcții de execuție."</p>
+      </div>
+      <div class="verdicte">
+        <span class="pastila">ancorare: trecut</span>
+        <span class="pastila">infirmare: trecut</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="carte refuz">
+    <div class="rand">
+      <p class="et">Întrebare</p>
+      <p class="intrebare">Cât este salariul minim brut în 2026?</p>
+    </div>
+    <div class="rand">
+      <p class="et">Refuz</p>
+      <p class="motiv">Nu pot răspunde. Legea indexată nu conține valoarea în vigoare azi,
+        iar un număr plauzibil ar fi mai periculos decât niciun număr.</p>
+      <div class="verdicte"><span class="pastila">oprit înainte de generare</span></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <p class="et">Ce s-a măsurat</p>
+  <h2>Cifra care contează nu e acuratețea. E cât de des greșește cu încredere.</h2>
+  <p class="intro">Un refuz costă un client nemulțumit. Un răspuns fals costă un client
+  care ia o decizie greșită și dă vina pe furnizor. Suita are 105 întrebări, fiecare cu
+  articolul-sursă verificat că există exact o dată în bază.</p>
+
+  <table>
+    <caption>Rulare încheiată, fără cazuri sărite. Corpus: 1372 de articole din Codul
+      muncii, Codul fiscal și Codul de procedură fiscală, în forma consolidată.</caption>
+    <thead><tr>
+      <th>Tip de întrebare</th><th style="text-align:right">Cazuri</th>
+      <th style="text-align:right">Corecte</th><th style="text-align:right">Răspunsuri false</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>În limbaj natural</td><td class="n">20</td><td class="n">18</td><td class="n">2</td></tr>
+      <tr><td>Trimitere la articol</td><td class="n">75</td><td class="n">75</td><td class="n"><b>0</b></td></tr>
+      <tr><td>Trebuia refuzată</td><td class="n">10</td><td class="n">10 refuzate</td><td class="n"><b>0</b></td></tr>
+      <tr><td><b>Total</b></td><td class="n"><b>105</b></td><td class="n"><b>93</b></td><td class="n"><b>1,9%</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <p class="et">Cum</p>
+  <h2>Șapte straturi între întrebare și răspuns.</h2>
+  <p class="intro">Ordinea contează: fiecare strat presupune că cel dinaintea lui poate
+  greși.</p>
+  <ol class="straturi">
+    <li><b>Fragmentare pe structura legii.</b> <span>Un articol complet per unitate, cu
+      Titlul și Capitolul atașate. Nu ferestre de dimensiune fixă.</span></li>
+    <li><b>Căutare hibridă.</b> <span>Potrivire lexicală și semantică, fuzionate. Textele
+      de lege cer și termeni exacți, și înțelegere.</span></li>
+    <li><b>Potrivire pe flexiune.</b> <span>„Preavizul" trebuie să găsească „preaviz".
+      Fără asta, româna rupe căutarea lexicală.</span></li>
+    <li><b>Rută deterministă.</b> <span>„Articolul 145 din Codul muncii" se rezolvă direct
+      din bază. Fără model, deci fără loc de greșeală.</span></li>
+    <li><b>Citări atașate în cod.</b> <span>Modelul scrie un marcaj. Sistemul pune citarea
+      stocată. O trimitere scrisă de model oprește răspunsul.</span></li>
+    <li><b>Doi verificatori independenți.</b> <span>Modele diferite, sarcini opuse: unul
+      caută ce nu se susține, celălalt încearcă să infirme.</span></li>
+    <li><b>Refuz explicit.</b> <span>Dacă oricare verificator cade, răspunsul nu pleacă.
+      Clientul primește motivul, nu o aproximare.</span></li>
+  </ol>
+</section>
+
+<section>
+  <p class="et">Ce nu face</p>
+  <h2>Lista asta e aici pentru că un furnizor juridic care ascunde limitele nu merită încredere.</h2>
+  <ul class="lipsa">
+    <li><b>Acoperă trei coduri.</b> Codul civil, dreptul comercial și jurisprudența nu sunt
+      indexate. O întrebare din afara lor primește refuz.</li>
+    <li><b>Corpusul e o fotografie.</b> Reîncărcarea la o modificare legislativă e manuală.
+      Valorile care se schimbă anual nu se pot cere de la el.</li>
+    <li><b>Fără OCR.</b> Un PDF scanat e respins explicit, nu procesat pe jumătate.</li>
+    <li><b>Analiza de contract e lentă.</b> Fiecare clauză trece prin lanțul complet.</li>
+    <li><b>Informare, nu consultanță.</b> Nu înlocuiește un avocat și nu dă sfaturi
+      individuale. Prezintă ce prevede legea.</li>
+  </ul>
+</section>
+
+<div class="final">
+  <p class="et">Mai departe</p>
+  <h2>Rulează local. Documentele nu părăsesc mașina.</h2>
+  <p>Fără cont, fără trimiterea contractelor către un furnizor extern. Pentru un cabinet
+  sau un departament de resurse umane, asta e de obicei condiția de la care începe discuția.</p>
+  <p>Nume comercial, preț și contact: <span class="gol">de completat</span></p>
+</div>
+
+<footer>
+  <p>Reutilizarea textelor oficiale este liberă conform Legii 8/1996 art. 9. Sursa
+  textelor: legislatie.just.ro, forma consolidată din paginile publice.</p>
+  <p>Informare juridică, nu consultanță. Verifică întotdeauna forma în vigoare în
+  Monitorul Oficial.</p>
+</footer>
+</div>
+
+<script>
+/* Singura miscare din pagina, si demonstreaza chiar mecanismul vandut:
+   marcajul scris de model devine citarea reala, luata din baza. */
+(function(){
+  var el = document.getElementById('marcaj');
+  if(!el) return;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    el.textContent = 'Art. 81 Codul muncii';
+    el.classList.remove('marcaj');
+    return;
+  }
+  setTimeout(function(){
+    el.textContent = 'Art. 81 Codul muncii';
+    el.classList.remove('marcaj');
+  }, 1100);
+})();
+</script>
+</body>
+</html>
