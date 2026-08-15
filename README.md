@@ -128,7 +128,7 @@ Se schimbă din mediu, fără atingerea codului:
 
 ```bash
 OLLAMA_URL=http://10.0.1.123:11434
-MODEL_VERIFICATOR=qwen3:30b        # ancorare
+MODEL_VERIFICATOR=qwen3:14b        # ancorare
 MODEL_VERIFICATOR_2=llama3.1:8b    # adversarial
 ```
 
@@ -237,9 +237,12 @@ Lista e completă și onestă. Citește-o înainte de a promite ceva unui client
   verificare, aproximativ 17 secunde. Implicit se analizează 6 clauze, deci în jur de două
   minute per document — o cerere HTTP care ține conexiunea deschisă atâta timp. Pentru producție
   e nevoie de job asincron cu identificator și interogare de stare, nu de mai puține clauze.
-- **Interfața nu a fost verificată vizual.** Build-ul trece, serverul întoarce HTTP 200 cu
-  conținutul așteptat și API-ul răspunde corect, dar nimeni nu a văzut pagina randată. Aspectul,
-  tema întunecată și comportamentul pe ecran îngust sunt neverificate.
+- **Randarea pe ecran îngust nu a fost verificată vizual.** Punctul de rupere la 560px
+  există și e prezent în CSS-ul servit, verificat prin `document.styleSheets` în browser, dar
+  nimeni nu a văzut pagina la lățime de telefon: compozitorul Wayland de pe mașina de
+  dezvoltare maximizează orice fereastră Chrome, deci un viewport de 430px nu s-a putut obține.
+  Interfața pe desktop, în schimb, e verificată în Chrome real, inclusiv fluxul complet de
+  întrebare, răspuns, cele două verdicte și afișarea temeiului legal.
 - **`docker compose` nu a fost rulat.** Docker nu era instalat pe mașina de dezvoltare.
   Fișierele sunt scrise, dar un build netestat ascunde de regulă cel puțin o eroare. Rularea
   locală, fără Docker, este calea verificată.

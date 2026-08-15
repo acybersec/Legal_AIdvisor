@@ -101,4 +101,35 @@ footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line);
   cursor: pointer; font-size: 14px; color: var(--ink-soft);
 }
 .incarcare label:hover { border-color: var(--accent); color: var(--accent); }
-.incarcare input[type=file] { font-size: 13px; max-width: 220px; }
+
+/* Controlul nativ de fisier se randeaza cu stilul sistemului de operare, adica
+   un buton alb care ignora complet tema. Il ascundem si folosim eticheta
+   intreaga drept zona de click: <label> care contine un <input> declanseaza
+   oricum selectorul de fisiere, deci nu pierdem nimic functional si nu e
+   nevoie de JavaScript. Ramane focalizabil de la tastatura. */
+.incarcare input[type=file] {
+  position: absolute; width: 1px; height: 1px;
+  opacity: 0; overflow: hidden; white-space: nowrap;
+  clip: rect(0 0 0 0); clip-path: inset(50%);
+}
+.incarcare label { position: relative; }
+.incarcare label::before {
+  content: "＋"; font-size: 15px; line-height: 1;
+  color: var(--ink-soft); transition: color 120ms ease;
+}
+.incarcare label:hover::before { color: var(--accent); }
+.incarcare label:focus-within { border-color: var(--accent); color: var(--accent); }
+
+/* Ecrane inguste.
+   Fara asta, formularul ramane pe un singur rand la orice latime: campul de
+   text se strange sub butonul "Intreaba" si pe telefon devine nefolosibil.
+   Un singur punct de rupere e suficient, layoutul e o singura coloana oricum.
+   Padingul lateral scade de la 24 la 16 ca textul sa nu se lipeasca de margine,
+   iar titlul coboara de la 29 la 24px. */
+@media (max-width: 560px) {
+  .wrap { padding: 30px 16px 64px; }
+  h1 { font-size: 24px; }
+  form { flex-direction: column; }
+  button { width: 100%; }
+  .incarcare label { align-items: flex-start; }
+}
