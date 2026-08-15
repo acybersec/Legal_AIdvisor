@@ -16,10 +16,10 @@ type Raspuns = {
 };
 
 const EXEMPLE = [
-  "Cate zile de concediu de odihna am minim pe an?",
+  "Câte zile de concediu de odihnă am minim pe an?",
   "Care este cota impozitului pe profit?",
-  "Cat poate dura o delegare fara acordul salariatului?",
-  "Cat este salariul minim brut in 2026, in lei?",
+  "Cât poate dura o delegare fără acordul salariatului?",
+  "Cât este salariul minim brut în 2026, în lei?",
 ];
 
 type ClauzaAnalizata = {
@@ -80,13 +80,13 @@ export default function Pagina() {
       const pana = Date.now() + RABDARE_MS;
       for (;;) {
         const s = await fetch(`${API}/analiza/${pornit.id}`);
-        if (!s.ok) throw new Error("Analiza nu mai poate fi gasita pe server.");
+        if (!s.ok) throw new Error("Analiza nu mai poate fi găsită pe server.");
         const d: Raport = await s.json();
         setRaport(d);
-        if (d.stare === "esuat") throw new Error(d.eroare || "Analiza a esuat.");
+        if (d.stare === "esuat") throw new Error(d.eroare || "Analiza a eșuat.");
         if (d.stare === "gata") break;
         if (Date.now() > pana) {
-          throw new Error("Analiza dureaza neobisnuit de mult. Verifica serverul de inferenta.");
+          throw new Error("Analiza durează neobișnuit de mult. Verifică serverul de inferență.");
         }
         await new Promise((r) => setTimeout(r, PAS_INTEROGARE_MS));
       }
@@ -118,7 +118,7 @@ export default function Pagina() {
       if (!r.ok) throw new Error(`Serverul a raspuns ${r.status}`);
       setRezultat(await r.json());
     } catch (e) {
-      setEroare(e instanceof Error ? e.message : "Eroare necunoscuta");
+      setEroare(e instanceof Error ? e.message : "Eroare necunoscută");
     } finally {
       setLucreaza(false);
     }
@@ -129,13 +129,13 @@ export default function Pagina() {
       <header>
         <h1>Legal_AIdvisor</h1>
         <p className="sub">
-          Raspunsuri ancorate in legislatia romaneasca. Fiecare afirmatie citeaza
+          Răspunsuri ancorate în legislația românească. Fiecare afirmație citează
           articolul din care provine, iar citarea vine din baza de date, nu de la model.
         </p>
         {stare && (
           <p className="stat">
             {stare.articole} articole indexate · Codul muncii · Codul fiscal ·
-            Cod procedura fiscala
+            Cod procedură fiscală
           </p>
         )}
       </header>
@@ -150,11 +150,11 @@ export default function Pagina() {
           type="text"
           value={intrebare}
           onChange={(e) => setIntrebare(e.target.value)}
-          placeholder="Pune o intrebare despre dreptul muncii sau fiscal..."
+          placeholder="Pune o întrebare despre dreptul muncii sau fiscal..."
           disabled={lucreaza}
         />
         <button type="submit" disabled={lucreaza || !intrebare.trim()}>
-          {lucreaza ? "Verific..." : "Intreaba"}
+          {lucreaza ? "Verific..." : "Întreabă"}
         </button>
       </form>
 
@@ -190,8 +190,8 @@ export default function Pagina() {
             {analizeaza
               ? raport
                 ? `Analizez clauza ${raport.clauze_gata + 1} din ${raport.clauze_total}...`
-                : "Pregatesc documentul..."
-              : "sau incarca un contract: PDF, DOCX, TXT"}
+                : "Pregătesc documentul..."
+              : "sau încarcă un contract: PDF, DOCX, TXT"}
           </span>
         </label>
       </div>
@@ -239,7 +239,7 @@ export default function Pagina() {
         <>
           <div className={`card${rezultat.a_refuzat ? " refuz" : ""}`}>
             <div className="eticheta">
-              {rezultat.a_refuzat ? "Raspuns refuzat" : "Raspuns verificat"}
+              {rezultat.a_refuzat ? "Răspuns refuzat" : "Răspuns verificat"}
             </div>
             <p className="raspuns">{rezultat.raspuns}</p>
             {rezultat.a_refuzat && rezultat.motiv_refuz && (
@@ -276,8 +276,8 @@ export default function Pagina() {
       )}
 
       <footer>
-        Informare juridica, nu consultanta. Nu inlocuieste un avocat. Verifica
-        intotdeauna forma in vigoare in Monitorul Oficial.
+        Informare juridică, nu consultanță. Nu înlocuiește un avocat. Verifică
+        întotdeauna forma în vigoare în Monitorul Oficial.
       </footer>
     </main>
   );
