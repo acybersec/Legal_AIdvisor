@@ -31,12 +31,27 @@ type ClauzaAnalizata = {
 };
 
 type Raport = {
+  id: string;
+  stare: "in_lucru" | "gata" | "esuat";
+  eroare: string;
   nume_fisier: string;
-  clauze_analizate: number;
+  clauze_total: number;
+  clauze_gata: number;
   clauze_acoperite: number;
   avertisment: string;
   rezultate: ClauzaAnalizata[];
 };
+
+// Cat de des intrebam serverul de stare.
+//
+// O clauza costa aproximativ 17 secunde, deci mai des de doua secunde ar fi
+// doar trafic. Mai rar ar face progresul sacadat si ar strica exact lucrul
+// pentru care exista interogarea: sa se vada ca sistemul lucreaza.
+const PAS_INTEROGARE_MS = 2000;
+
+// Dupa atat renuntam si spunem asta. Fara plafon, o analiza care nu se mai
+// termina ar lasa interfata sa se invarta la nesfarsit.
+const RABDARE_MS = 15 * 60 * 1000;
 
 export default function Pagina() {
   const [intrebare, setIntrebare] = useState("");
@@ -47,6 +62,9 @@ export default function Pagina() {
   const [raport, setRaport] = useState<Raport | null>(null);
   const [analizeaza, setAnalizeaza] = useState(false);
 
+  // Analiza e asincrona: incarcarea intoarce un identificator, iar rezultatele
+  // se cer periodic. Clauzele apar pe rand, nu toate la sfarsit, ca sa se vada
+  // ca sistemul lucreaza. Vezi backend/app/documente/joburi.py.
   async function incarcaDocument(fisier: File) {
     setAnalizeaza(true);
     setEroare("");
@@ -56,9 +74,22 @@ export default function Pagina() {
     date.append("fisier", fisier);
     try {
       const r = await fetch(`${API}/analizeaza`, { method: "POST", body: date });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.detail ?? `Serverul a raspuns ${r.status}`);
-      setRaport(d);
+      const pornit = await r.json();
+      if (!r.ok) throw new Error(pornit.detail ?? `Serverul a raspuns ${r.status}`);
+
+      const pana = Date.now() + RABDARE_MS;
+      for (;;) {
+        const s = await fetch(`${API}/analiza/${pornit.id}`);
+        if (!s.ok) throw new Error("Analiza nu mai poate fi gasita pe server.");
+        const d: Raport = await s.json();
+        setRaport(d);
+        if (d.stare === "esuat") throw new Error(d.eroare || "Analiza a esuat.");
+        if (d.stare === "gata") break;
+        if (Date.now() > pana) {
+          throw new Error("Analiza dureaza neobisnuit de mult. Verifica serverul de inferenta.");
+        }
+        await new Promise((r) => setTimeout(r, PAS_INTEROGARE_MS));
+      }
     } catch (e) {
       setEroare(e instanceof Error ? e.message : "Eroare la analiza documentului");
     } finally {
@@ -157,7 +188,9 @@ export default function Pagina() {
           />
           <span>
             {analizeaza
-              ? "Analizez documentul, dureaza cateva minute..."
+              ? raport
+                ? `Analizez clauza ${raport.clauze_gata + 1} din ${raport.clauze_total}...`
+                : "Pregatesc documentul..."
               : "sau incarca un contract: PDF, DOCX, TXT"}
           </span>
         </label>
@@ -175,8 +208,8 @@ export default function Pagina() {
           <div className="card">
             <div className="eticheta">Analiza document</div>
             <p className="raspuns">
-              {raport.nume_fisier} — {raport.clauze_analizate} clauze analizate,{" "}
-              {raport.clauze_acoperite} cu temei legal identificat.
+              {raport.nume_fisier} — {raport.clauze_gata} din {raport.clauze_total}{" "}
+              clauze analizate, {raport.clauze_acoperite} cu temei legal identificat.
             </p>
             <p className="motiv">{raport.avertisment}</p>
           </div>

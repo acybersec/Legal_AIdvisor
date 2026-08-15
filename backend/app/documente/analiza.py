@@ -52,40 +52,43 @@ def _intrebare_din_clauza(clauza: Clauza) -> str:
     )
 
 
+def analizeaza_clauza(pipe: Pipeline, clauza: Clauza) -> ClauzaAnalizata:
+    """O singura clauza prin lantul complet.
+
+    Extrasa din bucla ca analiza sa poata fi facuta incremental: registrul de
+    joburi apeleaza functia asta clauza cu clauza si publica fiecare rezultat
+    imediat ce e gata, in loc sa astepte tot documentul. Vezi documente/joburi.py.
+    """
+    # Regasirea foloseste TEXTUL CLAUZEI, nu intrebarea invelitoare.
+    # Motivul, masurat: invelisul "Ce prevede legislatia romaneasca in
+    # legatura cu urmatoarea clauza" dilueaza embedding-ul cu cuvinte
+    # generice si scade calitatea regasirii. Clauza in sine e o interogare
+    # semantica mult mai buna, pentru ca vorbeste despre subiectul ei.
+    rez = pipe.raspunde(
+        _intrebare_din_clauza(clauza), interogare_regasire=clauza.text[:600]
+    )
+    if rez.a_refuzat:
+        return ClauzaAnalizata(
+            index=clauza.index,
+            fragment=clauza.text[:180],
+            acoperita=False,
+            # Motivul REAL, nu unul generic. Un raport care ascunde de ce a
+            # refuzat sistemul nu se poate depana si nu se poate crede.
+            observatie=f"Fara temei legal verificabil. Motiv: {rez.motiv_refuz}",
+            surse=rez.candidati[:3],
+        )
+    return ClauzaAnalizata(
+        index=clauza.index,
+        fragment=clauza.text[:180],
+        acoperita=True,
+        observatie=rez.raspuns,
+        surse=rez.surse,
+    )
+
+
 def analizeaza(pipe: Pipeline, nume_fisier: str, text: str,
                clauze: list[Clauza]) -> RaportDocument:
-    rezultate: list[ClauzaAnalizata] = []
-    for clauza in clauze:
-        # Regasirea foloseste TEXTUL CLAUZEI, nu intrebarea invelitoare.
-        # Motivul, masurat: invelisul "Ce prevede legislatia romaneasca in
-        # legatura cu urmatoarea clauza" dilueaza embedding-ul cu cuvinte
-        # generice si scade calitatea regasirii. Clauza in sine e o interogare
-        # semantica mult mai buna, pentru ca vorbeste despre subiectul ei.
-        rez = pipe.raspunde(
-            _intrebare_din_clauza(clauza), interogare_regasire=clauza.text[:600]
-        )
-        if rez.a_refuzat:
-            rezultate.append(
-                ClauzaAnalizata(
-                    index=clauza.index,
-                    fragment=clauza.text[:180],
-                    acoperita=False,
-                    # Motivul REAL, nu unul generic. Un raport care ascunde de ce
-                    # a refuzat sistemul nu se poate depana si nu se poate crede.
-                    observatie=f"Fara temei legal verificabil. Motiv: {rez.motiv_refuz}",
-                    surse=rez.candidati[:3],
-                )
-            )
-        else:
-            rezultate.append(
-                ClauzaAnalizata(
-                    index=clauza.index,
-                    fragment=clauza.text[:180],
-                    acoperita=True,
-                    observatie=rez.raspuns,
-                    surse=rez.surse,
-                )
-            )
+    rezultate = [analizeaza_clauza(pipe, c) for c in clauze]
 
     return RaportDocument(
         nume_fisier=nume_fisier,
