@@ -79,8 +79,15 @@ h2{font-size:clamp(25px,3.6vw,34px);letter-spacing:-.02em;font-weight:600;
   margin:14px 0 0;max-width:22ch}
 .intro{color:var(--ink-2);max-width:56ch;margin:16px 0 0}
 
-/* Cifre: tabel, nu carduri. Sunt masuratori, se citesc comparativ. */
-table{width:100%;border-collapse:collapse;margin-top:30px;font-size:16px}
+/* Cifre: tabel, nu carduri. Sunt masuratori, se citesc comparativ.
+
+   Tabelul sta intr-un cadru care deruleaza singur. Motivul, masurat pe un
+   viewport de 375px: `width:100%` e un MINIM pentru tabele, nu un maxim - cand
+   continutul cere mai mult, tabelul se latea la 373px intr-un container de 327
+   si impingea toata pagina, producand derulare orizontala pe telefon. Un cadru
+   cu overflow-x izoleaza latimea acolo unde apare. */
+.tabel{overflow-x:auto;margin-top:30px;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:16px}
 th,td{text-align:left;padding:13px 12px;border-bottom:1px solid var(--linie)}
 th{font:600 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;
   color:var(--ink-2)}
@@ -176,6 +183,7 @@ footer p{margin:6px 0 0;max-width:60ch}
   care ia o decizie greșită și dă vina pe furnizor. Suita are 105 întrebări, fiecare cu
   articolul-sursă verificat că există exact o dată în bază.</p>
 
+  <div class="tabel">
   <table>
     <caption>Rulare încheiată, fără cazuri sărite. Corpus: 1372 de articole din Codul
       muncii, Codul fiscal și Codul de procedură fiscală, în forma consolidată.</caption>
@@ -190,6 +198,7 @@ footer p{margin:6px 0 0;max-width:60ch}
       <tr><td><b>Total</b></td><td class="n"><b>105</b></td><td class="n"><b>93</b></td><td class="n"><b>1,9%</b></td></tr>
     </tbody>
   </table>
+  </div>
 </section>
 
 <section>

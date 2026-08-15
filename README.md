@@ -356,3 +356,23 @@ ss -tnp | grep 11434    # conexiuni deschise catre serverul de inferenta
 
 De aceea analiza de document are un termen limită propriu, la nivel de job, independent de
 timeout-ul HTTP. Se reglează cu `TERMEN_ANALIZA_S`.
+
+**Cum se verifică randarea pe telefon când compozitorul maximizează ferestrele.** Pe Wayland,
+Chrome ignoră cererile de redimensionare, deci un viewport de 390px nu se poate obține mutând
+fereastra. Soluția e să randezi pagina într-un cadru îngust, **servit din aceeași origine** ca
+pagina testată, altfel restricția cross-origin blochează citirea:
+
+```html
+<iframe src="/" style="width:390px;height:1400px;border:0"></iframe>
+```
+
+Verificarea care contează nu e captura, ci măsurătoarea:
+
+```js
+var w = document.querySelector("iframe").contentDocument.documentElement;
+w.scrollWidth > w.clientWidth   // true = pagina deruleaza lateral, defect
+```
+
+Așa a fost găsită o depășire de 22px pe pagina de prezentare: `width:100%` pe un tabel este un
+**minim**, nu un maxim, iar tabelul se lățea peste containerul lui și împingea toată pagina.
+Reparat cu un cadru `overflow-x:auto` în jurul tabelului.
