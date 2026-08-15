@@ -45,6 +45,23 @@ docker compose up --build
 
 Frontend pe `http://localhost:3000`, API pe `http://localhost:8000`.
 
+### API
+
+| | |
+|---|---|
+| `POST /intreaba` | Întrebare, răspuns verificat. Sincron, ~17 secunde. |
+| `POST /analizeaza` | Încarcă un document. Răspunde **imediat**, 202, cu un identificator. |
+| `GET /analiza/{id}` | Starea analizei plus clauzele terminate **până acum**. |
+| `GET /sanatate` | Starea corpusului. |
+
+Analiza de document e asincronă dintr-un motiv practic: fiecare clauză costă un apel de
+generare plus două de verificare, aproximativ 17 secunde, iar implicit se analizează 6 clauze.
+O cerere sincronă ar ține conexiunea deschisă două minute, iar proxy-urile taie conexiunile
+inactive între 30 și 60 de secunde. Măsurat, încărcarea răspunde acum în **5 milisecunde**.
+
+Interogarea întoarce rezultatele **parțiale** deliberat. Clientul vede prima clauză după
+~17 secunde în loc de două minute, iar o analiză lentă devine vizibil diferită de una blocată.
+
 Corpusul se montează din `./data`. Dacă lipsește, generează-l întâi cu pașii de mai jos.
 
 ### Local, fără Docker
@@ -254,10 +271,9 @@ Lista e completă și onestă. Citește-o înainte de a promite ceva unui client
 - **Fără OCR.** PDF-urile scanate sunt respinse explicit, nu procesate gol.
 - **Fără urmărirea modificărilor legislative.** Corpusul e o fotografie la data ingestiei.
   Reingestia e manuală.
-- **Analiza de document este sincronă.** Fiecare clauză costă un apel de generare plus două de
-  verificare, aproximativ 17 secunde. Implicit se analizează 6 clauze, deci în jur de două
-  minute per document — o cerere HTTP care ține conexiunea deschisă atâta timp. Pentru producție
-  e nevoie de job asincron cu identificator și interogare de stare, nu de mai puține clauze.
+- **Un apel de inferență blocat ocupă lucrătorul până la repornire.** Analiza rulează pe un
+  singur fir, iar Python nu poate întrerupe un fir blocat. Jobul e declarat eșuat la termen și
+  clientul află, dar lucrătorul rămâne ocupat. Repararea completă cere izolare în alt proces.
 - **Randarea pe ecran îngust nu a fost verificată vizual.** Punctul de rupere la 560px
   există și e prezent în CSS-ul servit, verificat prin `document.styleSheets` în browser, dar
   nimeni nu a văzut pagina la lățime de telefon: compozitorul Wayland de pe mașina de
@@ -278,3 +294,34 @@ vigoare în Monitorul Oficial.
 ## Licență
 
 [MIT](LICENSE) © 2026 Radu Socoliuc
+
+## Depanare
+
+Două defecte care arată identic cu un cod stricat, ambele întâlnite pe acest proiect.
+
+**Serverul de inferență răspunde la `/api/tags` dar nu generează.** Controlul răspunde în
+milisecunde, modelele apar încărcate în VRAM, iar `/api/generate` întoarce 500 sau atârnă.
+Nu e o problemă de cod. Verifică întâi:
+
+```bash
+curl -s -m 5 http://<gazda>:11434/api/tags | head -c 80        # controlul
+curl -s -m 30 http://<gazda>:11434/api/generate \
+  -d '{"model":"llama3.1:8b","prompt":"ok","stream":false}'    # inferenta
+```
+
+Dacă primul răspunde și al doilea nu, repornește Ollama pe gazdă. Nimic din acest repo nu
+repară asta.
+
+**Un timeout de citire nu este un termen limită.** `httpx` aplică `timeout` per *operație* de
+citire. Dacă serverul din amonte ține conexiunea deschisă fără să răspundă, cronometrul se
+resetează și apelul nu expiră niciodată. Măsurat aici: conexiune `ESTABLISHED` către Ollama,
+zero octeți în coadă, deschisă **peste opt minute**, cu timeout de 180 de secunde.
+
+Diagnostic:
+
+```bash
+ss -tnp | grep 11434    # conexiuni deschise catre serverul de inferenta
+```
+
+De aceea analiza de document are un termen limită propriu, la nivel de job, independent de
+timeout-ul HTTP. Se reglează cu `TERMEN_ANALIZA_S`.
